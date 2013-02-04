@@ -114,140 +114,184 @@ end
 
 -- Some primitives
 
-local function prim_car (env, args)
-  return args.car.car
-end
+local primitive = {}
 
-local function prim_cdr (env, args)
-  return args.car.cdr
-end
-
-local function prim_cons (env, args)
-  return Sexpr.cons (args.car, args.cdr.car)
-end
-
-local function prim_plus (env, args)
-  local num1 = tonumber (args.car.lexeme)
-  local num2 = tonumber (args.cdr.car.lexeme)
-  return Sexpr.newAtom ("number", num1 + num2)
-end
-
-local function prim_mult (env, args)
-  local num1 = tonumber (args.car.lexeme)
-  local num2 = tonumber (args.cdr.car.lexeme)
-  return Sexpr.newAtom ("number", num1 * num2)
-end
-
-local function prim_lambda(env, args)
-  local formalParams = args.car
-  local body = args.cdr.car
-  return Sexpr.newFun (
-    string.format ("(lambda %s %s)", Sexpr.prettyPrint(formalParams),
-                   Sexpr.prettyPrint(body)),
-    function (env2, actualParams)
-      local localEnv = env:addBindings (formalParams, actualParams)
-      return M.evalSexpr (localEnv, body)
-    end)
-end
-
-local function prim_if (env, args)
-  local cond = M.evalSexpr (env, args.car)
-  local expr
-  if cond.type == "constant" and cond.lexeme == "nil" then
-    expr = args.cdr.cdr.car
-  else
-    expr = args.cdr.car
+-- Primitive (NAME, [FLAGS], FUNC)
+local function Primitive (name, flags, func)
+  if func == nil then
+    flags, func = func, flags
   end
-  return M.evalSexpr (env, expr)
+  primitive[name] = Sexpr.newFun (name, func, flags)
 end
 
-local function prim_eq (env, args)
-  local arg1 = args.car
-  local arg2 = args.cdr.car
-  return Sexpr.newBool (arg1.type == arg2.type
-                        and arg1.type ~= "cons"
-     		        and arg1.lexeme == arg2.lexeme)
-end
-
-local function prim_lt (env, args)
-  return Sexpr.newBool (tonumber (args.car.lexeme) < tonumber (args.cdr.car.lexeme))
-end
-
-local function prim_consp (env, args)
-  return Sexpr.newBool (args.car.type == "cons")
-end
-
-local function prim_neg (env, args)
-  return Sexpr.newAtom ("number", - tonumber (args.car.lexeme))
-end
-
-local function prim_setq (env, args)
-  local value = M.evalSexpr(env, args.cdr.car)
-  env[args.car.lexeme] = value
-  return value
-end
-
--- Our eval handles both strings and S-exprs
-local function prim_eval (env, sexpr)
-  local value
-  local car = sexpr.car
-  if car.type == "string" then
-    return M.evalExpr (env, sexpr.car.lexeme)
+-- (* NUMBER-1 NUMBER-2)
+Primitive ("*",
+  function (env, args)
+    local num1 = tonumber (args.car.lexeme)
+    local num2 = tonumber (args.cdr.car.lexeme)
+    return Sexpr.newAtom ("number", num1 * num2)
   end
-  return M.evalSexpr (env, car)
-end
+)
 
+-- (+ NUMBER-1 NUMBER-2)
+Primitive ("+",
+  function (env, args)
+    local num1 = tonumber (args.car.lexeme)
+    local num2 = tonumber (args.cdr.car.lexeme)
+    return Sexpr.newAtom ("number", num1 + num2)
+  end
+)
+
+-- (< NUMBER-1 NUMBER-2)
+Primitive ("<",
+  function (env, args)
+    local num1 = tonumber (args.car.lexeme)
+    local num2 = tonumber (args.cdr.car.lexeme)
+    return Sexpr.newBool (num1 < num2)
+  end
+)
+
+-- (car CONS)
+Primitive ("car",
+  function (env, args)
+    return args.car.car
+  end
+)
+
+-- (cdr CONS)
+Primitive ("cdr",
+  function (env, args)
+    return args.car.cdr
+  end
+)
+
+-- (cons ATOM LIST)
+Primitive ("cons",
+  function (env, args)
+    return Sexpr.cons (args.car, args.cdr.car)
+  end
+)
+
+-- (consp ARG)
+Primitive ("consp",
+  function (env, args)
+    return Sexpr.newBool (args.car.type == "cons")
+  end
+)
+
+-- (defmacro NAME (PARAMS) BODY)
+Primitive ("defmacro",
+  "lazy",
+  function (env, sexpr)
+    local name   = sexpr.car
+    local params = sexpr.cdr.car
+    local body   = sexpr.cdr.cdr.car
+    local macro  = function (env2, e)
+                     local paramScope = {}
+                     Env.bind (paramScope, params, e)
+                     local subsEnv  = Env.new (paramScope)
+                     local expanded = M.applyEnv (subsEnv, body)
+                     return M.evalSexpr (env2, expanded)
+                   end
+    local fun = Sexpr.newFun (
+      string.format ("(defmacro %s %s %s)", name.lexeme,
+                     Sexpr.prettyPrint (params), Sexpr.prettyPrint (body)),
+      macro, "macro")
+    env[name.lexeme] = fun
+    return fun
+  end
+)
+
+-- (eq ARG-1 ARG-2)
+Primitive ("eq",
+  function (env, args)
+    local arg1 = args.car
+    local arg2 = args.cdr.car
+    return Sexpr.newBool (arg1.type == arg2.type
+                          and arg1.type ~= "cons"
+     		          and arg1.lexeme == arg2.lexeme)
+  end
+)
+
+-- (eval S-EXPR)
+-- Our eval actually handles both strings and S-exprs
+Primitive ("eval",
+  function (env, sexpr)
+    local value
+    local car = sexpr.car
+    if car.type == "string" then
+      return M.evalExpr (env, sexpr.car.lexeme)
+    end
+    return M.evalSexpr (env, car)
+  end
+)
+
+-- (if COND TRUE-CLAUSE FALSE-CLAUSE)
+Primitive ("if",
+  "lazy",
+  function (env, args)
+    local cond = M.evalSexpr (env, args.car)
+    local expr
+    if cond.type == "constant" and cond.lexeme == "nil" then
+      expr = args.cdr.cdr.car
+    else
+      expr = args.cdr.car
+    end
+    return M.evalSexpr (env, expr)
+  end
+)
+
+-- (lambda (PARAMS) BODY)
+Primitive ("lambda",
+  "lazy",
+  function (env, args)
+    local formalParams = args.car
+    local body = args.cdr.car
+    return Sexpr.newFun (
+      string.format ("(lambda %s %s)", Sexpr.prettyPrint(formalParams),
+                     Sexpr.prettyPrint(body)),
+      function (env2, actualParams)
+        local localEnv = env:addBindings (formalParams, actualParams)
+        return M.evalSexpr (localEnv, body)
+      end
+    )
+  end
+)
+
+-- (load FILENAME)
 -- Evaluate a whole lisp file, and return 't'
-local function prim_load (env, sexpr)
-  M.runFile (env, sexpr.car.lexeme)
-  return Sexpr.newBool (true)
-end
+Primitive ("load",
+  function (env, sexpr)
+    M.runFile (env, sexpr.car.lexeme)
+    return Sexpr.newBool (true)
+  end
+)
 
--- Echo S-expr standard output
-local function prim_echo (env, sexpr)
-  print (Sexpr.prettyPrint (sexpr.car))
-  return Sexpr.newBool (true)
-end
+-- (neg NUMBER)
+Primitive ("neg",
+  function (env, args)
+    return Sexpr.newAtom ("number", - tonumber (args.car.lexeme))
+  end
+)
 
-local function prim_defmacro (env, sexpr)
-  local name   = sexpr.car
-  local params = sexpr.cdr.car
-  local body   = sexpr.cdr.cdr.car
-  local macro  = function (env2, e)
-                   local paramScope = {}
-                   Env.bind (paramScope, params, e)
-                   local subsEnv  = Env.new (paramScope)
-                   local expanded = M.applyEnv (subsEnv, body)
-                   return M.evalSexpr (env2, expanded)
-                 end
-  local fun = Sexpr.newFun (
-    string.format ("(defmacro %s %s %s)", name.lexeme,
-                   Sexpr.prettyPrint (params), Sexpr.prettyPrint (body)),
-    macro, "macro")
-  env[name.lexeme] = fun
-  return fun
-end
+-- (prin1 OBJECT)
+-- Print OBJECT to standard output
+Primitive ("prin1",
+  function (env, sexpr)
+    print (Sexpr.prettyPrint (sexpr.car))
+    return Sexpr.newBool (true)
+  end
+)
 
-local function getPrimitiveScope ()
-  return {
-    car      = Sexpr.newFun ("car",      prim_car),
-    cdr      = Sexpr.newFun ("cdr",      prim_cdr),
-    cons     = Sexpr.newFun ("cons",     prim_cons),
-    lambda   = Sexpr.newFun ("lambda",   prim_lambda,   "lazy"),
-    setq     = Sexpr.newFun ("setq",     prim_setq,     "lazy"),
-    ["<"]    = Sexpr.newFun ("<",        prim_lt),
-    ["+"]    = Sexpr.newFun ("+",        prim_plus),
-    ["*"]    = Sexpr.newFun ("*",        prim_mult),
-    neg      = Sexpr.newFun ("neg",      prim_neg),
-    eq       = Sexpr.newFun ("eq",       prim_eq),
-    consp    = Sexpr.newFun ("consp",    prim_consp),
-    eval     = Sexpr.newFun ("eval",     prim_eval),
-    ["load"] = Sexpr.newFun ("load",     prim_load),
-    echo     = Sexpr.newFun ("echo",     prim_echo),
-    defmacro = Sexpr.newFun ("defmacro", prim_defmacro, "lazy"),
-    ["if"]   = Sexpr.newFun ("if",       prim_if,       "lazy")
-  }
-end
+-- (setq NAME VALUE)
+Primitive ("setq",
+  "lazy",
+  function (env, args)
+    local value = M.evalSexpr(env, args.cdr.car)
+    env[args.car.lexeme] = value
+    return value
+  end
+)
 
 
 function M.runFile (env, filename)
@@ -263,7 +307,7 @@ end
 
 -- The top read-eval loop...
 function M.readEval ()
-  local env = Env.new (getPrimitiveScope ())
+  local env = Env.new (primitive)
 
   -- Run the prelude
   M.runFile (env, "Prelude.lsp")
