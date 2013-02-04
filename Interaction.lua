@@ -8,7 +8,7 @@ Lisp   = require "LispInterpreter"
 
 -- The top read-eval loop...
 local function readEval ()
-  local env = Env.new (Lisp.primitive)
+  local env = Lisp.primitive
 
   -- Run the prelude
   Lisp.runFile (env, "Prelude.lsp")

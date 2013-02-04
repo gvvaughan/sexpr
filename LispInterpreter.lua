@@ -186,12 +186,11 @@ Primitive ("defmacro",
     local name   = sexpr.car
     local params = sexpr.cdr.car
     local body   = sexpr.cdr.cdr.car
-    local macro  = function (env2, e)
-                     local paramScope = {}
-                     Env.bind (paramScope, params, e)
-                     local subsEnv  = Env.new (paramScope)
-                     local expanded = M.applyEnv (subsEnv, body)
-                     return M.evalSexpr (env2, expanded)
+    local macro  = function (env2, args)
+                     local scope = {}
+                     Env.bind (scope, params, args)
+                     local applied = M.applyEnv (scope, body)
+                     return M.evalSexpr (env2, applied)
                    end
     local fun = Sexpr.newFun (
       string.format ("(defmacro %s %s %s)", name.lexeme,
@@ -251,7 +250,7 @@ Primitive ("lambda",
       string.format ("(lambda %s %s)", Sexpr.prettyPrint(formalParams),
                      Sexpr.prettyPrint(body)),
       function (env2, actualParams)
-        local localEnv = env:addBindings (formalParams, actualParams)
+        local localEnv = Env.addBindings (env, formalParams, actualParams)
         return M.evalSexpr (localEnv, body)
       end
     )
