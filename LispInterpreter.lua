@@ -114,14 +114,14 @@ end
 
 -- Some primitives
 
-local primitive = {}
+M.primitive = {}
 
 -- Primitive (NAME, [FLAGS], FUNC)
 local function Primitive (name, flags, func)
   if func == nil then
     flags, func = func, flags
   end
-  primitive[name] = Sexpr.newFun (name, func, flags)
+  M.primitive[name] = Sexpr.newFun (name, func, flags)
 end
 
 -- (* NUMBER-1 NUMBER-2)
@@ -304,29 +304,5 @@ function M.runFile (env, filename)
   return s, errmsg
 end
 
-
--- The top read-eval loop...
-function M.readEval ()
-  local env = Env.new (primitive)
-
-  -- Run the prelude
-  M.runFile (env, "Prelude.lsp")
-
-  local line
-  repeat
-    io.write("> ")
-    line = io.read()
-    if line and line ~= ":q" then
-      local ok, value = pcall (M.evalExpr, env, line)
-      if ok then
-        if value then
-          print (Sexpr.prettyPrint (value))
-        end
-      else
-        print ("#error: ", value)
-      end
-    end
-  until not line or line == ":q"
-end
 
 return M
