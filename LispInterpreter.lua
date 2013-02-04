@@ -250,14 +250,6 @@ local function getPrimitiveScope ()
 end
 
 
-local function getGlobalEnv ()
-  local env =  Env.new (getPrimitiveScope ())
-  -- Run the prelude
-  M.runFile (env, "Prelude.lsp")
-  return env
-end
-
-
 function M.runFile (env, filename)
   local s, errmsg = io.slurp (filename)
 
@@ -271,7 +263,11 @@ end
 
 -- The top read-eval loop...
 function M.readEval ()
-  local env = getGlobalEnv ()
+  local env = Env.new (getPrimitiveScope ())
+
+  -- Run the prelude
+  M.runFile (env, "Prelude.lsp")
+
   local line
   repeat
     io.write("> ")
