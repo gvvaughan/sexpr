@@ -21,8 +21,8 @@ local M = {}
 local metatable = {}
 
 
-function atom (type, lexeme)
-  return setmetatable ({ type = type, lexeme = lexeme }, metatable)
+function atom (type, value)
+  return setmetatable ({ type = type, value = value }, metatable)
 end
 
 
@@ -38,7 +38,7 @@ end
 
 function M.func (name, func, special)
   return setmetatable ({
-      type = "function", lexeme = name, func = func, special = special
+      type = "function", value = name, func = func, special = special
     }, metatable)
 end
 
@@ -68,7 +68,7 @@ function M.tostring (sexpr, nested)
       s = s .. ")"
     end
   else
-    if nested and (sexpr.type ~= "constant" or sexpr.lexeme ~= "nil") then
+    if nested and (sexpr.type ~= "constant" or sexpr.value ~= "nil") then
       s = s .. " . "
     end
     if sexpr.type == "function" then
@@ -78,11 +78,11 @@ function M.tostring (sexpr, nested)
         s = s .. "#'"
       end
     end
-    -- We just add the lexeme, unless we are a nil in the
+    -- We just add the value, unless we are a nil in the
     -- end of a list...
-    if not nested or sexpr.type ~= "constant" or sexpr.lexeme ~= "nil" then
+    if not nested or sexpr.type ~= "constant" or sexpr.value ~= "nil" then
       if sexpr.type == "string" then s = s .. '"' end
-      s = s .. sexpr.lexeme
+      s = s .. sexpr.value
       if sexpr.type == "string" then s = s .. '"' end
     end
   end
@@ -256,7 +256,7 @@ end
 
 function M.bind (scope, parms, vals)
   if parms.type == "cons" then
-    scope[parms.car.lexeme] = vals.car
+    scope[parms.car.value] = vals.car
     M.bind (scope, parms.cdr, vals.cdr)
   end
 end
@@ -272,7 +272,7 @@ function M.applyEnv (env, expr)
   if expr.type == "cons" then
     return M.cons (M.applyEnv (env, expr.car), M.applyEnv (env, expr.cdr))
   elseif expr.type == "symbol" then
-    return env[expr.lexeme] or expr
+    return env[expr.value] or expr
   end
   return expr
 end
@@ -296,7 +296,7 @@ function M.evalQuote (env, sexpr)
   end
   if sexpr.type == "cons" then
     local car = sexpr.car
-    if car.type == "operator" and car.lexeme == "," then
+    if car.type == "operator" and car.value == "," then
       value = M.evalSexpr (env, sexpr.cdr)
     else	
       value = M.cons (M.evalQuote (env, car), M.evalQuote (env, sexpr.cdr))
@@ -330,9 +330,9 @@ function M.evalSexpr (env, sexpr)
   if sexpr.type == "cons" then
     -- 1. Cons cell
     local car = sexpr.car
-    if car.type == "operator" and car.lexeme == "'" then
+    if car.type == "operator" and car.value == "'" then
       value = sexpr.cdr
-    elseif car.type=="operator" and car.lexeme == "`" then
+    elseif car.type=="operator" and car.value == "`" then
       local cdr = M.evalQuote (env, sexpr.cdr)
       value = cdr
     else
@@ -354,9 +354,9 @@ function M.evalSexpr (env, sexpr)
     end
   elseif sexpr.type == "symbol" then
     -- a. symbol
-    value = env[sexpr.lexeme]
+    value = env[sexpr.value]
     if not value then
-      error ("The symbol '" .. sexpr.lexeme .. "' is not defined")
+      error ("The symbol '" .. sexpr.value .. "' is not defined")
     end
   else
     -- b. constant

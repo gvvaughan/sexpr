@@ -29,8 +29,8 @@ end
 -- (* NUMBER-1 NUMBER-2)
 Primitive ("*",
   function (env, args)
-    local num1 = tonumber (args.car.lexeme)
-    local num2 = tonumber (args.cdr.car.lexeme)
+    local num1 = tonumber (args.car.value)
+    local num2 = tonumber (args.cdr.car.value)
     return lisp_number (num1 * num2)
   end
 )
@@ -38,8 +38,8 @@ Primitive ("*",
 -- (+ NUMBER-1 NUMBER-2)
 Primitive ("+",
   function (env, args)
-    local num1 = tonumber (args.car.lexeme)
-    local num2 = tonumber (args.cdr.car.lexeme)
+    local num1 = tonumber (args.car.value)
+    local num2 = tonumber (args.cdr.car.value)
     return lisp_number (num1 + num2)
   end
 )
@@ -47,8 +47,8 @@ Primitive ("+",
 -- (< NUMBER-1 NUMBER-2)
 Primitive ("<",
   function (env, args)
-    local num1 = tonumber (args.car.lexeme)
-    local num2 = tonumber (args.cdr.car.lexeme)
+    local num1 = tonumber (args.car.value)
+    local num2 = tonumber (args.cdr.car.value)
     return lisp_bool (num1 < num2)
   end
 )
@@ -95,10 +95,10 @@ Primitive ("defmacro",
                      return lisp.evalSexpr (env2, applied)
                    end
     local func = lisp_func (
-      string.format ("(defmacro %s %s %s)", name.lexeme,
+      string.format ("(defmacro %s %s %s)", name.value,
                      lisp_tostring (params), lisp_tostring (body)),
       macro, "macro")
-    env[name.lexeme] = func
+    env[name.value] = func
     return func
   end
 )
@@ -110,7 +110,7 @@ Primitive ("eq",
     local arg2 = args.cdr.car
     return lisp_bool (arg1.type == arg2.type
                       and arg1.type ~= "cons"
-     		      and arg1.lexeme == arg2.lexeme)
+     		      and arg1.value == arg2.value)
   end
 )
 
@@ -121,7 +121,7 @@ Primitive ("eval",
     local car = sexpr.car
     if car.type == "string" then
       -- Our eval actually handles both strings and S-exprs
-      return lisp.evalExpr (env, sexpr.car.lexeme)
+      return lisp.evalExpr (env, sexpr.car.value)
     end
     return lisp.evalSexpr (env, car)
   end
@@ -133,7 +133,7 @@ Primitive ("if",
   function (env, args)
     local cond = lisp.evalSexpr (env, args.car)
     local expr
-    if cond.type == "constant" and cond.lexeme == "nil" then
+    if cond.type == "constant" and cond.value == "nil" then
       expr = args.cdr.cdr.car
     else
       expr = args.cdr.car
@@ -163,7 +163,7 @@ Primitive ("lambda",
 -- Evaluate a whole lisp file, and return 't'
 Primitive ("load",
   function (env, sexpr)
-    lisp.runFile (env, sexpr.car.lexeme)
+    lisp.runFile (env, sexpr.car.value)
     return lisp_bool (true)
   end
 )
@@ -171,7 +171,7 @@ Primitive ("load",
 -- (neg NUMBER)
 Primitive ("neg",
   function (env, args)
-    return lisp_number (0 - tonumber (args.car.lexeme))
+    return lisp_number (0 - tonumber (args.car.value))
   end
 )
 
@@ -201,7 +201,7 @@ Primitive ("setq",
   "lazy",
   function (env, args)
     local value = lisp.evalSexpr(env, args.cdr.car)
-    env[args.car.lexeme] = value
+    env[args.car.value] = value
     return value
   end
 )
