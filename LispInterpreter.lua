@@ -294,6 +294,18 @@ Primitive ("prin1",
   end
 )
 
+-- (progn SEXPR...)
+Primitive ("progn",
+  function (env, args)
+    local result = Sexpr.newBool (nil)
+    while args and args.car do
+      result = M.evalSexpr (env, args.car)
+      args = args.cdr
+    end
+    return result
+  end
+)
+
 -- (setq NAME VALUE)
 Primitive ("setq",
   "lazy",
