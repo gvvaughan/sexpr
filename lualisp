@@ -11,14 +11,14 @@ local function REPL ()
   local env = primitive.symbols
 
   -- Run the prelude
-  lisp.runFile (env, "init.lsp")
+  lisp.evalfile (env, "init.lsp")
 
   local line
   repeat
     io.write ("> ")
     line = io.read ()
     if line and line ~= ":q" then
-      local ok, value = pcall (lisp.evalExpr, env, line)
+      local ok, value = pcall (lisp.evalstring, env, line)
       if ok then
         if value then
           print (lisp.tostring (value))

@@ -284,11 +284,6 @@ end
 --[[ --------------- ]]--
 
 
-function M.evalExpr (env, expr)
-  return M.evalSexprList (env, M.parse (expr))
-end
-
-
 function M.evalQuote (env, sexpr)
   local value
   if not sexpr.kind then
@@ -308,17 +303,15 @@ function M.evalQuote (env, sexpr)
 end
 
 
-function M.evalSexprList (env, sexprList, i)
-  i = i or 1
-  local count = #sexprList
-  if i > count then return nil end
-
-  local firstValue = M.evalSexpr (env, sexprList[i])
-  if i == count then
-    return firstValue
+-- Evaluate each item in a list
+local function evalList (env, list)
+  local value
+  if list.kind == "cons" then
+    value = M.cons (M.evalSexpr (env, list.car), evalList (env, list.cdr))
   else
-    return M.evalSexprList (env, sexprList, 1+ i)
+    value = list
   end
+  return value
 end
 
 
@@ -348,7 +341,7 @@ function M.evalSexpr (env, sexpr)
       if func.special == "lazy" or func.special == "macro"  then
         args = sexpr.cdr
       else
-        args = M.evalList (env, sexpr.cdr)
+        args = evalList (env, sexpr.cdr)
       end
       value = func.func (env, args)
     end
@@ -366,23 +359,31 @@ function M.evalSexpr (env, sexpr)
 end
 
 
--- Evaluate each item in a list
-function M.evalList (env, list)
-  local value
-  if list.kind == "cons" then
-    value = M.cons (M.evalSexpr (env, list.car), M.evalList (env, list.cdr))
-  else
-    value = list
+function M.evalstring (env, expr)
+  local sexprlist = M.parse (expr)
+
+  local function eval_sexprlist (sexprlist, i)
+    i = i or 1
+    local count = #sexprlist
+    if i > count then return nil end
+
+    local result = M.evalSexpr (env, sexprlist[i])
+    if i == count then
+      return result
+    else
+      return eval_sexprlist (sexprlist, i + 1)
+    end
   end
-  return value
+
+  return eval_sexprlist (sexprlist)
 end
 
 
-function M.runFile (env, filename)
+function M.evalfile (env, filename)
   local s, errmsg = io.slurp (filename)
 
   if s then
-    s, errmsg = M.evalExpr (env, s)
+    s, errmsg = M.evalstring (env, s)
   end
 
   return s, errmsg
