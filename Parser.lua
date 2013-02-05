@@ -25,23 +25,22 @@ local function newToken (t)
 end
 
 
--- Parse a sub expression, returning both an expression and
--- the index following this sub expression
-function M.parseTokens (expr)
+-- Parse a sub-expression, returning a list of parsed tokens.
+function M.parseTokens (s)
   tokens = {}
 
   -- We do it character by character, using queues to
   -- handle strings as well as regular lexemes
 
-  local currentToken = {}
+  local tok = ""
   local inString = false
   local isEscaping = false
 
-  for i = 1, #expr do
-    local c = expr:sub (i, i)
+  for i = 1, #s do
+    local c = s:sub (i, i)
     -- 1. Escaping this character, whether in a string or not
     if isEscaping then
-      table.insert (currentToken, c)	
+      tok = tok .. c	
       isEscaping = false
 
     -- 2. An escape character
@@ -55,48 +54,48 @@ function M.parseTokens (expr)
         -- a. starting a new string
         -- If we already had a token, let us finish that
         -- up first
-        if #currentToken > 0 then
-          table.insert (tokens, newToken (table.concat (currentToken)))
+        if tok ~= "" then
+          table.insert (tokens, newToken (tok))
         end
       else
         -- b. ending a string
-        table.insert (tokens, Sexpr.newString (table.concat (currentToken)))
+        table.insert (tokens, Sexpr.newString (tok))
       end	
-      currentToken = {}
+      tok = ""
       inString = false
 
     -- 4. inside a string, so just add the character
     elseif inString then
-      table.insert (currentToken, c)
+      tok = tok .. c
 
     -- 5. special operator (and not inside string)
     elseif isoperator[c] then
       -- We add any saved token
-      if #currentToken > 0 then
-        table.insert (tokens, newToken (table.concat (currentToken)))
-        currentToken = {}
+      if tok ~= "" then
+        table.insert (tokens, newToken (tok))
+        tok = ""
       end
       table.insert (tokens, Sexpr.newOperator(c))
 
     -- 6. A blank character, which should add the current token, if any
     elseif c:find ("%s") then
-      if #currentToken > 0 then
-        table.insert(tokens, newToken (table.concat (currentToken)))
-        currentToken = {}
+      if tok ~= "" then
+        table.insert(tokens, newToken (tok))
+        tok = ""
       end
 
     -- 7. A non-blank character being part of the symbol
     else
-      table.insert (currentToken, c)
+      tok = tok .. c
     end
   end
 
   -- Add any trailing token...
-  if #currentToken > 0 then
+  if tok ~= "" then
     if inString then
-      table.insert (tokens, Sexpr.newString (table.concat (currentToken)))
+      table.insert (tokens, Sexpr.newString (tok))
     else
-      table.insert (tokens, newToken (table.concat (currentToken)))
+      table.insert (tokens, newToken (tok))
     end
   end
 
