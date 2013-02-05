@@ -95,61 +95,62 @@ local function lex (s, i)
 end
 
 
-local read, push
-
--- If the first token is a '.', we just return the second token, as is,
--- while skipping a subsequent ')', else if it is a ')' we return NIL,
--- else we get the first Sexpr and CONS it with the rest.
-function push (s, start)
-  local token, kind, n = lex (s, start)
-  if kind == "eof" then
-    error ("Token index " .. start ..
-           " is out of range when creating CONS S-Expr", 2)
-  end
-
-  if kind == "operator" then
-    if token == "." then
-      local cdr, i = read (s, n)
-      -- We skip the last ')'
-      token, kind, n = lex (s, i)
-      if kind == "eof" or token ~= ")" then
-        error("The CDR part ending with " .. tostring (cdr) ..
-              " was not followed by a ')'")
-      end
-      return cdr, n
-    elseif token == ")" then
-      return Sexpr.newAtom ("constant", "nil"), n
-    end
-  end
-
-  local car, i = read (s, start)
-  local cdr, rest = push (s, i)
-  return Sexpr.cons (car, cdr), rest
-end
-
-function read (s, i)
-  local token, kind, cdr
-  token, kind, i = lex (s, i)
-  if kind == "eof" then
-    return nil, i
-  end
-
-  -- If the first token is a '(', we should expect a "list"
-  if kind == "operator" then
-    if token == "(" then
-      return push (s, i)
-    end
-
-    cdr, i = read (s, i)
-    return Sexpr.cons (Sexpr.newAtom (kind, token), cdr), i
-  end
-
-  return Sexpr.newAtom (kind, token), i
-end
-
--- Parse the code snippet, yielding a list of (unevaluated) S-expr
+-- Call `lex' repeatedly to parse `s', yielding a table of
+-- (unevaluated) S-expr.
 function M.parse (s)
   local i = 0
+  local read, push
+
+  function push (s, start)
+    local token, kind, n = lex (s, start)
+    if kind == "eof" then
+      error ("Token index " .. start ..
+             " is out of range when creating CONS S-Expr", 2)
+    end
+
+    if kind == "operator" then
+      -- If the first token is a '.', return the second token.
+      if token == "." then
+        local cdr, i = read (s, n)
+        -- Skip over the closing ')'.
+        token, kind, n = lex (s, i)
+        if kind == "eof" or token ~= ")" then
+          error("The CDR part ending with " .. tostring (cdr) ..
+                " was not followed by a ')'")
+        end
+        return cdr, n
+
+      -- If the first token is is a ')', return NIL.
+      elseif token == ")" then
+        return Sexpr.newAtom ("constant", "nil"), n
+      end
+    end
+
+    -- Otherwise, get the first Sexpr and CONS it with the rest.
+    local car, i = read (s, start)
+    local cdr, rest = push (s, i)
+    return Sexpr.cons (car, cdr), rest
+  end
+
+  function read (s, i)
+    local token, kind, cdr
+    token, kind, i = lex (s, i)
+    if kind == "eof" then
+      return nil, i
+    end
+
+    -- If the first token is a '(', we should expect a "list"
+    if kind == "operator" then
+      if token == "(" then
+        return push (s, i)
+      end
+
+      cdr, i = read (s, i)
+      return Sexpr.cons (Sexpr.newAtom (kind, token), cdr), i
+    end
+
+    return Sexpr.newAtom (kind, token), i
+  end
 
   local sexpr
   local sexprList = {}
