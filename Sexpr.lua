@@ -39,14 +39,6 @@ function M.newFun(name, fun, special)
   return { type = "function", lexeme = name, fun = fun, special = special }
 end
 
-function M:car()
-   return self.car
-end
-
-function M:cdr()
-   return self.cdr
-end
-
 function M.cons(a, b)
   return setmetatable ({ type="cons", car = a, cdr = b }, metatable)
 end
