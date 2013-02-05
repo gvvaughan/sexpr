@@ -2,7 +2,6 @@
 -- The license text is found in "license.txt"
 --
 
-Env    = require "Environment"
 Parser = require "Parser"
 Lisp   = require "LispInterpreter"
 

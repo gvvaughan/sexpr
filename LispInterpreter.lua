@@ -7,7 +7,6 @@
 -- This is a Scheme/Lisp interpreter, written in Lua
 --
 
-Env    = require "Environment"
 Parser = require "Parser"
 Sexpr  = require "Sexpr"
 
@@ -102,6 +101,19 @@ function M.evalList (env, list)
   return value
 end
 
+function M.bind (scope, parms, vals)
+  if parms.type == "cons" then
+    scope[parms.car.lexeme] = vals.car
+    M.bind (scope, parms.cdr, vals.cdr)
+  end
+end
+
+function M:addBindings (parms, vals)
+  local scope = {}
+  M.bind (scope, parms, vals)
+  return setmetatable (scope, { __index = self })
+end
+
 -- Apply an environment and get the substituted S-exp
 function M.applyEnv (env, expr)
   if expr.type == "cons" then
@@ -188,7 +200,7 @@ Primitive ("defmacro",
     local body   = sexpr.cdr.cdr.car
     local macro  = function (env2, args)
                      local scope = {}
-                     Env.bind (scope, params, args)
+                     M.bind (scope, params, args)
                      local applied = M.applyEnv (scope, body)
                      return M.evalSexpr (env2, applied)
                    end
@@ -250,7 +262,7 @@ Primitive ("lambda",
       string.format ("(lambda %s %s)", Sexpr.prettyPrint(formalParams),
                      Sexpr.prettyPrint(body)),
       function (env2, actualParams)
-        local localEnv = Env.addBindings (env, formalParams, actualParams)
+        local localEnv = M.addBindings (env, formalParams, actualParams)
         return M.evalSexpr (localEnv, body)
       end
     )
