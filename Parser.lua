@@ -107,7 +107,7 @@ function M.parseTokens (s)
   repeat
     token, kind, i = lex (s, i)
     if kind == "string" then
-      table.insert (tokens, Sexpr.newString (token))
+      table.insert (tokens, Sexpr.newAtom ("string", token))
     elseif isoperator[kind] then
       table.insert (tokens, Sexpr.newOperator (kind))
     elseif isconstant[token] then

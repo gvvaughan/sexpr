@@ -30,10 +30,6 @@ function M.newBool (cond)
   return M.newAtom ("constant", cond and "t" or "nil")
 end
 
-function M.newString (s)
-  return M.newAtom ("string", s)
-end
-
 function M.newOperator (op)
   local type = "operator"
   if op == "(" then
