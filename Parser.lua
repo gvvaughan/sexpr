@@ -109,7 +109,7 @@ function M.parseTokens (s)
     if kind == "string" then
       table.insert (tokens, Sexpr.newAtom ("string", token))
     elseif isoperator[kind] then
-      table.insert (tokens, Sexpr.newOperator (kind))
+      table.insert (tokens, Sexpr.newAtom ("operator", kind))
     elseif isconstant[token] then
       table.insert (tokens, Sexpr.newAtom ("constant", token))
     elseif token and token:match ("^%d+$") then
@@ -135,21 +135,23 @@ function createCons (tokens, start)
            " is out of range when creating CONS S-Expr", 2)
   end
 
-  if firstTok.type == "operator" and firstTok.lexeme == "." then
-    -- We skip the last ')'
-    local i, cdr = createSexpr (tokens, start+1)
-    if not tokens[i] or tokens[i].type ~= "close paren" then
-      error("The CDR part ending with " .. tokens[i - 1].lexeme ..
-            " was not followed by a ')'")
+  if firstTok.type == "operator" then
+    if firstTok.lexeme == "." then
+      -- We skip the last ')'
+      local i, cdr = createSexpr (tokens, start+1)
+      if not tokens[i] or tokens[i].lexeme ~= ")" then
+        error("The CDR part ending with " .. tokens[i - 1].lexeme ..
+              " was not followed by a ')'")
+      end
+      return i + 1, cdr
+    elseif firstTok.lexeme == ")" then
+      return start + 1, newToken ("nil")
     end
-    return i + 1, cdr
-  elseif firstTok.type == "close paren" then
-    return start + 1, newToken ("nil")
-  else
-    local i, car = createSexpr (tokens, start)
-    local rest, cdr = createCons (tokens, i)
-    return rest, Sexpr.cons (car, cdr)
   end
+
+  local i, car = createSexpr (tokens, start)
+  local rest, cdr = createCons (tokens, i)
+  return rest, Sexpr.cons (car, cdr)
 end
 
 function createSexpr (tokens, start)
@@ -158,14 +160,16 @@ function createSexpr (tokens, start)
   if not firstToken then
     return start, nil
   end
-  if firstToken.type == "open paren" then
-    return createCons (tokens, start + 1)
-  elseif firstToken.type == "operator" then
+  if firstToken.type == "operator" then
+    if firstToken.lexeme == "(" then
+      return createCons (tokens, start + 1)
+    end
+
     local i, cdr = createSexpr (tokens, start + 1)
     return i, Sexpr.cons (firstToken, cdr)
-  else
-    return start + 1, firstToken
   end
+
+  return start + 1, firstToken
 end
 
 -- Parse the code snippet, yielding a list of (unevaluated) S-expr

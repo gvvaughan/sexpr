@@ -30,16 +30,6 @@ function M.newBool (cond)
   return M.newAtom ("constant", cond and "t" or "nil")
 end
 
-function M.newOperator (op)
-  local type = "operator"
-  if op == "(" then
-    type = "open paren"
-  elseif op == ")" then
-    type = "close paren"
-  end
-  return M.newAtom (type, op)
-end
-
 -- Create a new function reference, where the
 -- special parameter can be nil (for a normal function)
 -- or 'lazy' for functions handling their own internal
