@@ -359,26 +359,22 @@ function M.evalSexpr (env, sexpr)
 end
 
 
-function M.evalstring (env, expr)
-  local sexprlist = M.parse (expr)
-
-  local function eval_sexprlist (sexprlist, i)
-    i = i or 1
-    local count = #sexprlist
-    if i > count then return nil end
-
-    local result = M.evalSexpr (env, sexprlist[i])
-    if i == count then
-      return result
-    else
-      return eval_sexprlist (sexprlist, i + 1)
-    end
+-- Evaluate a string of lisp.
+function M.evalstring (env, s)
+  local t, errmsg = M.parse (s)
+  if t == nil then
+    return nil, errmsg
   end
 
-  return eval_sexprlist (sexprlist)
+  local result
+  for _, sexpr in ipairs (t) do
+    result = M.evalSexpr (env, sexpr)
+  end
+  return result
 end
 
 
+-- Evaluate a file of lisp.
 function M.evalfile (env, filename)
   local s, errmsg = io.slurp (filename)
 
