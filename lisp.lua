@@ -284,7 +284,7 @@ end
 --[[ --------------- ]]--
 
 
-function M.evalQuote (env, sexpr)
+local function evalquote (env, sexpr)
   local value
   if not sexpr.kind then
     error ("Invalid S-expr: ", 2)
@@ -292,9 +292,9 @@ function M.evalQuote (env, sexpr)
   if sexpr.kind == "cons" then
     local car = sexpr.car
     if car.kind == "operator" and car.value == "," then
-      value = M.evalSexpr (env, sexpr.cdr)
+      value = M.evalsexpr (env, sexpr.cdr)
     else	
-      value = M.cons (M.evalQuote (env, car), M.evalQuote (env, sexpr.cdr))
+      value = M.cons (evalquote (env, car), evalquote (env, sexpr.cdr))
     end
   else
     value = sexpr
@@ -303,11 +303,11 @@ function M.evalQuote (env, sexpr)
 end
 
 
--- Evaluate each item in a list
-local function evalList (env, list)
+-- Evaluate each item in argument list.
+local function evalargs (env, list)
   local value
   if list.kind == "cons" then
-    value = M.cons (M.evalSexpr (env, list.car), evalList (env, list.cdr))
+    value = M.cons (M.evalsexpr (env, list.car), evalargs (env, list.cdr))
   else
     value = list
   end
@@ -315,7 +315,7 @@ local function evalList (env, list)
 end
 
 
-function M.evalSexpr (env, sexpr)
+function M.evalsexpr (env, sexpr)
   local value
   if not sexpr.kind then
     error ("Invalid S-expr: " .. sexpr, 2)
@@ -326,10 +326,10 @@ function M.evalSexpr (env, sexpr)
     if car.kind == "operator" and car.value == "'" then
       value = sexpr.cdr
     elseif car.kind == "operator" and car.value == "`" then
-      local cdr = M.evalQuote (env, sexpr.cdr)
+      local cdr = evalquote (env, sexpr.cdr)
       value = cdr
     else
-      local func = M.evalSexpr (env, car)
+      local func = M.evalsexpr (env, car)
       if not func or func.kind ~= "function" then
         error ("The S-expr did not evaluate to a function: " .. tostring (car))
       end
@@ -341,7 +341,7 @@ function M.evalSexpr (env, sexpr)
       if func.special == "lazy" or func.special == "macro"  then
         args = sexpr.cdr
       else
-        args = evalList (env, sexpr.cdr)
+        args = evalargs (env, sexpr.cdr)
       end
       value = func.func (env, args)
     end
@@ -368,7 +368,7 @@ function M.evalstring (env, s)
 
   local result
   for _, sexpr in ipairs (t) do
-    result = M.evalSexpr (env, sexpr)
+    result = M.evalsexpr (env, sexpr)
   end
   return result
 end

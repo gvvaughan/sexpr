@@ -92,7 +92,7 @@ Primitive ("defmacro",
                      local scope = {}
                      lisp.bind (scope, params, args)
                      local applied = lisp.applyEnv (scope, body)
-                     return lisp.evalSexpr (env2, applied)
+                     return lisp.evalsexpr (env2, applied)
                    end
     local func = lisp_func (
       string.format ("(defmacro %s %s %s)", name.value,
@@ -123,7 +123,7 @@ Primitive ("eval",
       -- Our eval actually handles both strings and S-exprs
       return lisp.evalExpr (env, sexpr.car.value)
     end
-    return lisp.evalSexpr (env, car)
+    return lisp.evalsexpr (env, car)
   end
 )
 
@@ -131,14 +131,14 @@ Primitive ("eval",
 Primitive ("if",
   "lazy",
   function (env, args)
-    local cond = lisp.evalSexpr (env, args.car)
+    local cond = lisp.evalsexpr (env, args.car)
     local expr
     if cond.kind == "constant" and cond.value == "nil" then
       expr = args.cdr.cdr.car
     else
       expr = args.cdr.car
     end
-    return lisp.evalSexpr (env, expr)
+    return lisp.evalsexpr (env, expr)
   end
 )
 
@@ -153,7 +153,7 @@ Primitive ("lambda",
                      lisp_tostring (body)),
       function (env2, actualParams)
         local localEnv = lisp.addBindings (env, formalParams, actualParams)
-        return lisp.evalSexpr (localEnv, body)
+        return lisp.evalsexpr (localEnv, body)
       end
     )
   end
@@ -189,7 +189,7 @@ Primitive ("progn",
   function (env, args)
     local result = lisp_bool (nil)
     while args and args.car do
-      result = lisp.evalSexpr (env, args.car)
+      result = lisp.evalsexpr (env, args.car)
       args = args.cdr
     end
     return result
@@ -200,7 +200,7 @@ Primitive ("progn",
 Primitive ("setq",
   "lazy",
   function (env, args)
-    local value = lisp.evalSexpr(env, args.cdr.car)
+    local value = lisp.evalsexpr(env, args.cdr.car)
     env[args.car.value] = value
     return value
   end
