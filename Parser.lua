@@ -95,12 +95,12 @@ local function lex (s, i)
 end
 
 
-local createSexpr, createCons
+local read, push
 
 -- If the first token is a '.', we just return the second token, as is,
 -- while skipping a subsequent ')', else if it is a ')' we return NIL,
 -- else we get the first Sexpr and CONS it with the rest.
-function createCons (s, start)
+function push (s, start)
   local token, kind, n = lex (s, start)
   if kind == "eof" then
     error ("Token index " .. start ..
@@ -109,7 +109,7 @@ function createCons (s, start)
 
   if kind == "operator" then
     if token == "." then
-      local cdr, i = createSexpr (s, n)
+      local cdr, i = read (s, n)
       -- We skip the last ')'
       token, kind, n = lex (s, i)
       if kind == "eof" or token ~= ")" then
@@ -122,12 +122,12 @@ function createCons (s, start)
     end
   end
 
-  local car, i = createSexpr (s, start)
-  local cdr, rest = createCons (s, i)
+  local car, i = read (s, start)
+  local cdr, rest = push (s, i)
   return Sexpr.cons (car, cdr), rest
 end
 
-function createSexpr (s, i)
+function read (s, i)
   local token, kind, cdr
   token, kind, i = lex (s, i)
   if kind == "eof" then
@@ -137,10 +137,10 @@ function createSexpr (s, i)
   -- If the first token is a '(', we should expect a "list"
   if kind == "operator" then
     if token == "(" then
-      return createCons (s, i)
+      return push (s, i)
     end
 
-    cdr, i = createSexpr (s, i)
+    cdr, i = read (s, i)
     return Sexpr.cons (Sexpr.newAtom (kind, token), cdr), i
   end
 
@@ -148,13 +148,13 @@ function createSexpr (s, i)
 end
 
 -- Parse the code snippet, yielding a list of (unevaluated) S-expr
-function M.parseSexpr (s)
+function M.parse (s)
   local i = 0
 
   local sexpr
   local sexprList = {}
   repeat
-    sexpr, i = createSexpr (s, i)
+    sexpr, i = read (s, i)
     if sexpr then
       table.insert (sexprList, sexpr)
     end

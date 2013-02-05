@@ -13,7 +13,7 @@ Sexpr  = require "Sexpr"
 local M = {}
 
 function M.evalExpr (env, expr)
-  return M.evalSexprList (env, Parser.parseSexpr (expr))
+  return M.evalSexprList (env, Parser.parse (expr))
 end
 
 function M.evalQuote (env, sexpr)
