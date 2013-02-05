@@ -18,14 +18,7 @@
 
 local M = {}
 
-local metatable = {
-    __tostring = function (expr)
-      if expr.type == "cons" then
-        return "(" .. tostring(expr.car) .. " . " .. tostring(expr.cdr) .. ")"
-      end
-      return "atom[type=" .. expr.type .. ', lexeme="' .. expr.lexeme .. '"]'
-     end,
-}
+local metatable = { __tostring = M.prettyPrint }
 
 -- Atoms
 
