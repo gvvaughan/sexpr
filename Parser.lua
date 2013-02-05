@@ -103,80 +103,66 @@ local function lex (s, i)
 end
 
 
--- Parse a sub-expression, returning a list of parsed tokens.
-function M.parseTokens (s)
-  local tokens = {}
-  local token, kind, i
-
-  i = 0
-  repeat
-    token, kind, i = lex (s, i)
-    if kind ~= "eof" then
-      table.insert (tokens, Sexpr.newAtom (kind, token))
-    end
-  until kind == "eof"
-
-  return tokens
-end
-
-
 local createSexpr, createCons
 
 -- If the first token is a '.', we just return the second token, as is,
 -- while skipping a subsequent ')', else if it is a ')' we return NIL,
 -- else we get the first Sexpr and CONS it with the rest.
-function createCons (tokens, start)
-  local firstTok = tokens[start]
-  if not firstTok then
+function createCons (s, start)
+  local token, kind, n = lex (s, start)
+  if kind == "eof" then
     error ("Token index " .. start ..
            " is out of range when creating CONS S-Expr", 2)
   end
 
-  if firstTok.type == "operator" then
-    if firstTok.lexeme == "." then
+  if kind == "operator" then
+    if token == "." then
+      local cdr, i = createSexpr (s, n)
       -- We skip the last ')'
-      local i, cdr = createSexpr (tokens, start+1)
-      if not tokens[i] or tokens[i].lexeme ~= ")" then
-        error("The CDR part ending with " .. tokens[i - 1].lexeme ..
+      token, kind, n = lex (s, i)
+      if kind == "eof" or token ~= ")" then
+        error("The CDR part ending with " .. tostring (cdr) ..
               " was not followed by a ')'")
       end
-      return i + 1, cdr
-    elseif firstTok.lexeme == ")" then
-      return start + 1, newToken ("nil")
+      return cdr, n
+    elseif token == ")" then
+      return Sexpr.newAtom ("constant", "nil"), n
     end
   end
 
-  local i, car = createSexpr (tokens, start)
-  local rest, cdr = createCons (tokens, i)
-  return rest, Sexpr.cons (car, cdr)
+  local car, i = createSexpr (s, start)
+  local cdr, rest = createCons (s, i)
+  return Sexpr.cons (car, cdr), rest
 end
 
-function createSexpr (tokens, start)
-  -- If the first token is a '(', we should expect a "list"
-  local firstToken = tokens[start]
-  if not firstToken then
-    return start, nil
+function createSexpr (s, i)
+  local token, kind, cdr
+  token, kind, i = lex (s, i)
+  if kind == "eof" then
+    return nil, i
   end
-  if firstToken.type == "operator" then
-    if firstToken.lexeme == "(" then
-      return createCons (tokens, start + 1)
+
+  -- If the first token is a '(', we should expect a "list"
+  if kind == "operator" then
+    if token == "(" then
+      return createCons (s, i)
     end
 
-    local i, cdr = createSexpr (tokens, start + 1)
-    return i, Sexpr.cons (firstToken, cdr)
+    cdr, i = createSexpr (s, i)
+    return Sexpr.cons (Sexpr.newAtom (kind, token), cdr), i
   end
 
-  return start + 1, firstToken
+  return Sexpr.newAtom (kind, token), i
 end
 
 -- Parse the code snippet, yielding a list of (unevaluated) S-expr
-function M.parseSexpr (expr)
-  local tokenList = M.parseTokens (expr)
-  local expr
-  local i = 1
+function M.parseSexpr (s)
+  local i = 0
+
+  local sexpr
   local sexprList = {}
   repeat
-    i, sexpr = createSexpr (tokenList, i)
+    sexpr, i = createSexpr (s, i)
     if sexpr then
       table.insert (sexprList, sexpr)
     end
