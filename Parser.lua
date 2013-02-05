@@ -17,14 +17,6 @@ local isconstant = set.new { "nil", "t" }
 local isoperator = set.new { "(", ")", ",", "'", "`", "." }
 local isdelimiter = set.new { ";", " ", "\t", "\n", "\r", '"' } + isoperator
 
-local function newToken (t)
-  local s = type (t) == "table" and table.concat (t) or t
-
-  if isconstant[s] then return Sexpr.newAtom ("constant", s) end
-  if s:match ("^%d+$") then return Sexpr.newAtom ("number", tonumber (s)) end
-  return Sexpr.newAtom ("symbol", s)
-end
-
 
 -- Increment index into s and return that character.
 local function nextch (s, i)
