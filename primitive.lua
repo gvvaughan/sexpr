@@ -77,7 +77,7 @@ Primitive ("cons",
 -- (consp ARG)
 Primitive ("consp",
   function (env, args)
-    return lisp_bool (args.car.type == "cons")
+    return lisp_bool (args.car.kind == "cons")
   end
 )
 
@@ -108,8 +108,8 @@ Primitive ("eq",
   function (env, args)
     local arg1 = args.car
     local arg2 = args.cdr.car
-    return lisp_bool (arg1.type == arg2.type
-                      and arg1.type ~= "cons"
+    return lisp_bool (arg1.kind == arg2.kind
+                      and arg1.kind ~= "cons"
      		      and arg1.value == arg2.value)
   end
 )
@@ -119,7 +119,7 @@ Primitive ("eval",
   function (env, sexpr)
     local value
     local car = sexpr.car
-    if car.type == "string" then
+    if car.kind == "string" then
       -- Our eval actually handles both strings and S-exprs
       return lisp.evalExpr (env, sexpr.car.value)
     end
@@ -133,7 +133,7 @@ Primitive ("if",
   function (env, args)
     local cond = lisp.evalSexpr (env, args.car)
     local expr
-    if cond.type == "constant" and cond.value == "nil" then
+    if cond.kind == "constant" and cond.value == "nil" then
       expr = args.cdr.cdr.car
     else
       expr = args.cdr.car

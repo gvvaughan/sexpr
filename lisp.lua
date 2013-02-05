@@ -21,8 +21,8 @@ local M = {}
 local metatable = {}
 
 
-function atom (type, value)
-  return setmetatable ({ type = type, value = value }, metatable)
+function atom (kind, value)
+  return setmetatable ({ kind = kind, value = value }, metatable)
 end
 
 
@@ -32,13 +32,13 @@ end
 
 
 function M.cons (a, b)
-  return setmetatable ({ type="cons", car = a, cdr = b }, metatable)
+  return setmetatable ({ kind = "cons", car = a, cdr = b }, metatable)
 end
 
 
 function M.func (name, func, special)
   return setmetatable ({
-      type = "function", value = name, func = func, special = special
+      kind = "function", value = name, func = func, special = special
     }, metatable)
 end
 
@@ -50,7 +50,7 @@ end
 
 function M.tostring (sexpr, nested)
   local s = ""
-  if sexpr.type == "cons" then
+  if sexpr.kind == "cons" then
     -- If we are inside a list, we skip the initial
     -- '('
     if nested then
@@ -68,10 +68,10 @@ function M.tostring (sexpr, nested)
       s = s .. ")"
     end
   else
-    if nested and (sexpr.type ~= "constant" or sexpr.value ~= "nil") then
+    if nested and (sexpr.kind ~= "constant" or sexpr.value ~= "nil") then
       s = s .. " . "
     end
-    if sexpr.type == "function" then
+    if sexpr.kind == "function" then
       if sexpr.special == "macro" then
         s = s .. "#macro'"
       else
@@ -80,10 +80,10 @@ function M.tostring (sexpr, nested)
     end
     -- We just add the value, unless we are a nil in the
     -- end of a list...
-    if not nested or sexpr.type ~= "constant" or sexpr.value ~= "nil" then
-      if sexpr.type == "string" then s = s .. '"' end
+    if not nested or sexpr.kind ~= "constant" or sexpr.value ~= "nil" then
+      if sexpr.kind == "string" then s = s .. '"' end
       s = s .. sexpr.value
-      if sexpr.type == "string" then s = s .. '"' end
+      if sexpr.kind == "string" then s = s .. '"' end
     end
   end
   return s
@@ -255,7 +255,7 @@ end
 
 
 function M.bind (scope, parms, vals)
-  if parms.type == "cons" then
+  if parms.kind == "cons" then
     scope[parms.car.value] = vals.car
     M.bind (scope, parms.cdr, vals.cdr)
   end
@@ -269,9 +269,9 @@ end
 
 -- Apply an environment and get the substituted S-exp
 function M.applyEnv (env, expr)
-  if expr.type == "cons" then
+  if expr.kind == "cons" then
     return M.cons (M.applyEnv (env, expr.car), M.applyEnv (env, expr.cdr))
-  elseif expr.type == "symbol" then
+  elseif expr.kind == "symbol" then
     return env[expr.value] or expr
   end
   return expr
@@ -291,12 +291,12 @@ end
 
 function M.evalQuote (env, sexpr)
   local value
-  if not sexpr.type then
+  if not sexpr.kind then
     error ("Invalid S-expr: ", 2)
   end
-  if sexpr.type == "cons" then
+  if sexpr.kind == "cons" then
     local car = sexpr.car
-    if car.type == "operator" and car.value == "," then
+    if car.kind == "operator" and car.value == "," then
       value = M.evalSexpr (env, sexpr.cdr)
     else	
       value = M.cons (M.evalQuote (env, car), M.evalQuote (env, sexpr.cdr))
@@ -324,20 +324,20 @@ end
 
 function M.evalSexpr (env, sexpr)
   local value
-  if not sexpr.type then
+  if not sexpr.kind then
     error ("Invalid S-expr: " .. sexpr, 2)
   end
-  if sexpr.type == "cons" then
+  if sexpr.kind == "cons" then
     -- 1. Cons cell
     local car = sexpr.car
-    if car.type == "operator" and car.value == "'" then
+    if car.kind == "operator" and car.value == "'" then
       value = sexpr.cdr
-    elseif car.type=="operator" and car.value == "`" then
+    elseif car.kind == "operator" and car.value == "`" then
       local cdr = M.evalQuote (env, sexpr.cdr)
       value = cdr
     else
       local func = M.evalSexpr (env, car)
-      if not func or func.type ~= "function" then
+      if not func or func.kind ~= "function" then
         error ("The S-expr did not evaluate to a function: " .. tostring (car))
       end
 
@@ -352,7 +352,7 @@ function M.evalSexpr (env, sexpr)
       end
       value = func.func (env, args)
     end
-  elseif sexpr.type == "symbol" then
+  elseif sexpr.kind == "symbol" then
     -- a. symbol
     value = env[sexpr.value]
     if not value then
@@ -369,7 +369,7 @@ end
 -- Evaluate each item in a list
 function M.evalList (env, list)
   local value
-  if list.type == "cons" then
+  if list.kind == "cons" then
     value = M.cons (M.evalSexpr (env, list.car), M.evalList (env, list.cdr))
   else
     value = list
