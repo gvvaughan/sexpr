@@ -11,7 +11,7 @@
 -- 1. constant (t or nil)
 -- 2. string
 -- 3. number
--- 4. operator [',`] 
+-- 4. operator [',`]
 -- 5. symbol
 -- 6. function
 -- 8. macro
@@ -58,7 +58,7 @@ end
 -- their body for further evaluation
 function M.newFun(name, fun, special)
   return { type = "function", lexeme = name, fun = fun, special = special }
-end 
+end
 
 function M:car()
    return self.car
@@ -74,49 +74,45 @@ end
 
 
 -- Pretty printer
-function M.prettyPrint(sexpr, inList)
-  local pretty
+function M.prettyPrint (sexpr, inList)
+  local s = ""
   if sexpr.type == "cons" then
-    local str = {}
     -- If we are inside a list, we skip the initial
     -- '('
     if inList then
-      table.insert(str, " ")
+      s = s .. " "
     else
-      table.insert(str, "(")
+      s = s .. "("
     end
-    table.insert(str, M.prettyPrint(sexpr.car))      
-      
+    s = s .. M.prettyPrint (sexpr.car)
+
     -- Pretty print the CDR part in list mode
-    table.insert(str, M.prettyPrint(sexpr.cdr, true))
-     
+    s = s .. M.prettyPrint (sexpr.cdr, true)
+
     -- Close with a ')' if we were not in a list mode already
     if not inList then
-      table.insert(str, ")")
+      s = s .. ")"
     end
-    pretty = table.concat(str)
   else
-    local str = {}
     if inList and (sexpr.type ~= "constant" or sexpr.lexeme ~= "nil") then
-      table.insert(str, " . ")
+      s = s .. " . "
     end
     if sexpr.type == "function" then
       if sexpr.special == "macro" then
-        table.insert(str, "#macro'")
+        s = s .. "#macro'"
       else
-        table.insert(str, "#'")
+        s = s .. "#'"
       end
     end
     -- We just add the lexeme, unless we are a nil in the
     -- end of a list...
-    if not inList or sexpr.type ~= "constant" or  sexpr.lexeme ~= "nil" then
-      if sexpr.type == "string" then table.insert(str, '"') end
-      table.insert(str, sexpr.lexeme)
-      if sexpr.type == "string" then table.insert(str, '"') end
+    if not inList or sexpr.type ~= "constant" or sexpr.lexeme ~= "nil" then
+      if sexpr.type == "string" then s = s .. '"' end
+      s = s .. sexpr.lexeme
+      if sexpr.type == "string" then s = s .. '"' end
     end
-    pretty = table.concat(str)
   end
-  return pretty
+  return s
 end
 
 return M
