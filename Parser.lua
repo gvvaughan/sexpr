@@ -15,6 +15,7 @@ local M = {}
 
 local isconstant = set.new { "nil", "t" }
 local isoperator = set.new { "(", ")", ",", "'", "`", "." }
+local isdelimiter = set.new { ";", " ", "\t", "\n", "\r", '"' } + isoperator
 
 local function newToken (t)
   local s = type (t) == "table" and table.concat (t) or t
@@ -25,79 +26,98 @@ local function newToken (t)
 end
 
 
+-- Increment index into s and return that character.
+local function nextch (s, i)
+  return i < #s and s[i + 1] or nil, i + 1
+end
+
+
+-- Lexical scanner: Return three values: `token', `kind', `i', where
+-- `token' is the content of the just scanned token, `kind' is the
+-- type of token returned, and `i' is the index of the next unscanned
+-- character in `s'.
+local function lex (s, i)
+  local c
+  repeat
+    c, i = nextch (s, i)
+
+    -- Comments start with `;'.
+    if c == ';' then
+      repeat
+        c, i = nextch (s, i)
+      until c == '\n' or c == '\r' or c == nil
+    end
+
+    -- Continue skipping additional lines of comments and whitespace.
+  until c ~= ' ' and c ~= '\t' and c ~= '\n' and c ~= '\r'
+
+  -- Return end-of-file immediately.
+  if c == nil then return nil, "eof", i end
+
+  -- Return delimiter tokens.
+  -- These are returned in the `kind' field so we can immediately tell
+  -- the difference between a ')' delimiter and a ")" string token.
+  if c == '(' or c == ')' or c == "'" or c == '`' then
+    return "", c, i
+  end
+
+  -- Strings start and end with `"'.
+  -- Note we read another character immediately to skip the opening
+  -- quote, and don't append the closing quote to the returned token.
+  local token = ''
+  if c == '"' then
+    repeat
+      c, i = nextch (s, i)
+      if c == nil then
+        return token, "incomplete string", i - 1
+      elseif c == '\\' then
+        c, i = nextch (s, i)
+	-- `\' can be used to escape `"', `\n' and `\' in strings
+	if c ~= '"' and c ~= '\n' and c ~= '\\' then
+	  token = token .. '\\'
+	end
+	if c ~= '\n' then
+	  token = token .. c
+	end
+      elseif c ~= '"' then
+	token = token .. c
+      end
+    until c == '"'
+
+    return token, "string", i
+  end
+
+  -- Anything else is a `word' - up to the next whitespace or delimiter.
+  repeat
+    token = token .. c
+    c, i = nextch (s, i)
+    if isdelimiter[c] or c == nil then
+      return token, "word", i - 1
+    end
+  until false
+end
+
+
 -- Parse a sub-expression, returning a list of parsed tokens.
 function M.parseTokens (s)
-  tokens = {}
+  local tokens = {}
+  local token, kind, i
 
-  -- We do it character by character, using queues to
-  -- handle strings as well as regular lexemes
-
-  local tok = ""
-  local inString = false
-  local isEscaping = false
-
-  for i = 1, #s do
-    local c = s:sub (i, i)
-    -- 1. Escaping this character, whether in a string or not
-    if isEscaping then
-      tok = tok .. c	
-      isEscaping = false
-
-    -- 2. An escape character
-    elseif c == "\\" then
-      isEscaping = true
-
-    -- 3. A quotation mark
-    elseif c == '"'  then
-      -- Two sub cases:
-      if not inString then
-        -- a. starting a new string
-        -- If we already had a token, let us finish that
-        -- up first
-        if tok ~= "" then
-          table.insert (tokens, newToken (tok))
-        end
-      else
-        -- b. ending a string
-        table.insert (tokens, Sexpr.newString (tok))
-      end	
-      tok = ""
-      inString = false
-
-    -- 4. inside a string, so just add the character
-    elseif inString then
-      tok = tok .. c
-
-    -- 5. special operator (and not inside string)
-    elseif isoperator[c] then
-      -- We add any saved token
-      if tok ~= "" then
-        table.insert (tokens, newToken (tok))
-        tok = ""
-      end
-      table.insert (tokens, Sexpr.newOperator(c))
-
-    -- 6. A blank character, which should add the current token, if any
-    elseif c:find ("%s") then
-      if tok ~= "" then
-        table.insert(tokens, newToken (tok))
-        tok = ""
-      end
-
-    -- 7. A non-blank character being part of the symbol
-    else
-      tok = tok .. c
+  i = 0
+  repeat
+    token, kind, i = lex (s, i)
+    if kind == "string" then
+      table.insert (tokens, Sexpr.newString (token))
+    elseif isoperator[kind] then
+      table.insert (tokens, Sexpr.newOperator (kind))
+    elseif isconstant[token] then
+      table.insert (tokens, Sexpr.newAtom ("constant", token))
+    elseif token and token:match ("^%d+$") then
+      table.insert (tokens, Sexpr.newAtom ("number", tonumber (token)))
+    elseif kind ~= "eof" then
+      table.insert (tokens, Sexpr.newAtom ("symbol", token))
     end
-  end
-
-  -- Add any trailing token...
-  if tok ~= "" then
-    if inString then
-      table.insert (tokens, Sexpr.newString (tok))
-    else
-      table.insert (tokens, newToken (tok))
-    end
-  end
+  until kind == "eof"
 
   return tokens
 end
