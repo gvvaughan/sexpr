@@ -55,10 +55,8 @@ local function lex (s, i)
   if c == nil then return nil, "eof", i end
 
   -- Return delimiter tokens.
-  -- These are returned in the `kind' field so we can immediately tell
-  -- the difference between a ')' delimiter and a ")" string token.
-  if c == '(' or c == ')' or c == "'" or c == '`' then
-    return "", c, i
+  if isoperator[c] then
+    return c, "operator", i
   end
 
   -- Strings start and end with `"'.
@@ -92,7 +90,14 @@ local function lex (s, i)
     token = token .. c
     c, i = nextch (s, i)
     if isdelimiter[c] or c == nil then
-      return token, "word", i - 1
+      local kind = "symbol"
+      if isconstant[token] then
+        kind = "constant"
+      elseif token:match ("^%d+$") then
+        token = tonumber (token)
+	kind = "number"
+      end
+      return token, kind, i - 1
     end
   until false
 end
@@ -106,16 +111,8 @@ function M.parseTokens (s)
   i = 0
   repeat
     token, kind, i = lex (s, i)
-    if kind == "string" then
-      table.insert (tokens, Sexpr.newAtom ("string", token))
-    elseif isoperator[kind] then
-      table.insert (tokens, Sexpr.newAtom ("operator", kind))
-    elseif isconstant[token] then
-      table.insert (tokens, Sexpr.newAtom ("constant", token))
-    elseif token and token:match ("^%d+$") then
-      table.insert (tokens, Sexpr.newAtom ("number", tonumber (token)))
-    elseif kind ~= "eof" then
-      table.insert (tokens, Sexpr.newAtom ("symbol", token))
+    if kind ~= "eof" then
+      table.insert (tokens, Sexpr.newAtom (kind, token))
     end
   until kind == "eof"
 
