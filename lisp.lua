@@ -50,7 +50,7 @@ end
 
 function M.tostring (sexpr, nested)
   local s = ""
-  if sexpr.kind == "cons" then
+  if sexpr and sexpr.kind == "cons" then
     -- If we are inside a list, we skip the initial
     -- '('
     if nested then
@@ -67,7 +67,7 @@ function M.tostring (sexpr, nested)
     if not nested then
       s = s .. ")"
     end
-  else
+  elseif sexpr then
     if nested and (sexpr.kind ~= "constant" or sexpr.value ~= "nil") then
       s = s .. " . "
     end
@@ -101,6 +101,14 @@ metatable.__tostring = M.tostring
 local isconstant = set.new { "nil", "t" }
 local isoperator = set.new { "(", ")", ",", "'", "`", "." }
 local isdelimiter = set.new { ";", " ", "\t", "\n", "\r", '"' } + isoperator
+
+
+-- Return the 1-based line number at which offset `i' occurs in `s'.
+local function iton (s, i)
+  local n = 1
+  for _ in string.gmatch (s:sub (1, i), "\n") do n = n + 1 end
+  return tostring (n)
+end
 
 
 -- Increment index into s and return that character.
@@ -144,7 +152,7 @@ local function lex (s, i)
     repeat
       c, i = nextch (s, i)
       if c == nil then
-        return token, "incomplete string", i - 1
+        error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
       elseif c == '\\' then
         c, i = nextch (s, i)
 	-- `\' can be used to escape `"', `\n' and `\' in strings
@@ -189,8 +197,7 @@ function M.parse (s)
   function push (s, start)
     local token, kind, n = lex (s, start)
     if kind == "eof" then
-      error ("Token index " .. start ..
-             " is out of range when creating CONS S-Expr", 2)
+      error (iton (s, start) .. ": unexpected end-of-file", 0)
     end
 
     if kind == "operator" then
@@ -200,8 +207,7 @@ function M.parse (s)
         -- Skip over the closing ')'.
         token, kind, n = lex (s, i)
         if kind == "eof" or token ~= ")" then
-          error("The CDR part ending with " .. tostring (cdr) ..
-                " was not followed by a ')'")
+          error (iton (s, n) .. ": missing ')'", 0)
         end
         return cdr, n
 
@@ -287,7 +293,7 @@ end
 local function evalquote (env, sexpr)
   local value
   if not sexpr.kind then
-    error ("Invalid S-expr: ", 2)
+    error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
   if sexpr.kind == "cons" then
     local car = sexpr.car
@@ -318,7 +324,7 @@ end
 function M.evalsexpr (env, sexpr)
   local value
   if not sexpr.kind then
-    error ("Invalid S-expr: " .. sexpr, 2)
+    error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
   if sexpr.kind == "cons" then
     -- 1. Cons cell
@@ -331,7 +337,7 @@ function M.evalsexpr (env, sexpr)
     else
       local func = M.evalsexpr (env, car)
       if not func or func.kind ~= "function" then
-        error ("The S-expr did not evaluate to a function: " .. tostring (car))
+        error ("symbol's function definition is void: " .. tostring (car), 0)
       end
 
       -- The function can be either "lazy", in that it deals with eval-
@@ -349,7 +355,7 @@ function M.evalsexpr (env, sexpr)
     -- a. symbol
     value = env[sexpr.value]
     if not value then
-      error ("The symbol '" .. sexpr.value .. "' is not defined")
+      error ("undefined symbol '" .. sexpr.value .. "'", 0)
     end
   else
     -- b. constant
