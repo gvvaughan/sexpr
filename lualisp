@@ -21,7 +21,7 @@ local function REPL ()
       local ok, value = pcall (lisp.evalstring, env, line)
       if ok then
         if value then
-          print (lisp.tostring (value))
+          print (tostring (value))
         end
       else
         print ("#error: " .. value)

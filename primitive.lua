@@ -9,8 +9,8 @@
 
 lisp = require "lisp"
 
-local lisp_bool, lisp_cons, lisp_func, lisp_number, lisp_tostring =
-      lisp.bool, lisp.cons, lisp.func, lisp.number, lisp.tostring
+local lisp_nil, lisp_t, lisp_cons, lisp_function, lisp_number =
+      lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number
 
 local M = {}
 
@@ -23,7 +23,7 @@ local function Primitive (name, flags, func)
   if func == nil then
     flags, func = func, flags
   end
-  M.symbols[name] = lisp_func (name, func, flags)
+  M.symbols[name] = lisp_function {name, func, flags}
 end
 
 -- (* NUMBER-1 NUMBER-2)
@@ -31,7 +31,7 @@ Primitive ("*",
   function (env, args)
     local num1 = tonumber (args.car.value)
     local num2 = tonumber (args.cdr.car.value)
-    return lisp_number (num1 * num2)
+    return lisp_number {num1 * num2}
   end
 )
 
@@ -40,7 +40,7 @@ Primitive ("+",
   function (env, args)
     local num1 = tonumber (args.car.value)
     local num2 = tonumber (args.cdr.car.value)
-    return lisp_number (num1 + num2)
+    return lisp_number {num1 + num2}
   end
 )
 
@@ -49,7 +49,7 @@ Primitive ("<",
   function (env, args)
     local num1 = tonumber (args.car.value)
     local num2 = tonumber (args.cdr.car.value)
-    return lisp_bool (num1 < num2)
+    return num1 < num2 and lisp_t or lisp_nil
   end
 )
 
@@ -70,14 +70,14 @@ Primitive ("cdr",
 -- (cons ATOM LIST)
 Primitive ("cons",
   function (env, args)
-    return lisp_cons (args.car, args.cdr.car)
+    return lisp_cons {args.car, args.cdr.car}
   end
 )
 
 -- (consp ARG)
 Primitive ("consp",
   function (env, args)
-    return lisp_bool (args.car.kind == "cons")
+    return args.car.kind == "cons" and lisp_t or lisp_nil
   end
 )
 
@@ -94,10 +94,10 @@ Primitive ("defmacro",
                      local applied = lisp.applyEnv (scope, body)
                      return lisp.evalsexpr (env2, applied)
                    end
-    local func = lisp_func (
+    local func = lisp_function {
       string.format ("(defmacro %s %s %s)", name.value,
-                     lisp_tostring (params), lisp_tostring (body)),
-      macro, "macro")
+                     tostring (params), tostring (body)),
+      macro, "macro"}
     env[name.value] = func
     return func
   end
@@ -108,9 +108,9 @@ Primitive ("eq",
   function (env, args)
     local arg1 = args.car
     local arg2 = args.cdr.car
-    return lisp_bool (arg1.kind == arg2.kind
-                      and arg1.kind ~= "cons"
-     		      and arg1.value == arg2.value)
+    return (arg1.kind == arg2.kind
+            and arg1.kind ~= "cons"
+            and arg1.value == arg2.value) and lisp_t or lisp_nil
   end
 )
 
@@ -148,14 +148,14 @@ Primitive ("lambda",
   function (env, args)
     local formalParams = args.car
     local body = args.cdr.car
-    return lisp_func (
-      string.format ("(lambda %s %s)", lisp_tostring (formalParams),
-                     lisp_tostring (body)),
+    return lisp_function {
+      string.format ("(lambda %s %s)", tostring (formalParams),
+                     tostring (body)),
       function (env2, actualParams)
         local localEnv = lisp.addBindings (env, formalParams, actualParams)
         return lisp.evalsexpr (localEnv, body)
       end
-    )
+    }
   end
 )
 
@@ -164,7 +164,7 @@ Primitive ("lambda",
 Primitive ("load",
   function (env, sexpr)
     lisp.runFile (env, sexpr.car.value)
-    return lisp_bool (true)
+    return lisp_t
   end
 )
 
@@ -179,15 +179,15 @@ Primitive ("neg",
 -- Print OBJECT to standard output
 Primitive ("prin1",
   function (env, sexpr)
-    print (lisp_tostring (sexpr.car))
-    return lisp_bool (true)
+    print (tostring (sexpr.car))
+    return lisp_t
   end
 )
 
 -- (progn SEXPR...)
 Primitive ("progn",
   function (env, args)
-    local result = lisp_bool (nil)
+    local result = lisp_nil
     while args and args.car do
       result = lisp.evalsexpr (env, args.car)
       args = args.cdr

@@ -18,78 +18,50 @@ local M = {}
 --[[ ------ ]]--
 
 
-local metatable = {}
+local Atom
 
+Atom = Object {
+  _init = { "kind" },
 
-function atom (kind, value)
-  return setmetatable ({ kind = kind, value = value }, metatable)
-end
-
-
-function M.bool (cond)
-  return atom ("constant", cond and "t" or "nil")
-end
-
-
-function M.cons (a, b)
-  return setmetatable ({ kind = "cons", car = a, cdr = b }, metatable)
-end
-
-
-function M.func (name, func, special)
-  return setmetatable ({
-      kind = "function", value = name, func = func, special = special
-    }, metatable)
-end
-
-
-function M.number (num)
-  return atom ("number", num)
-end
-
-
-function M.tostring (sexpr, nested)
-  local s = ""
-  if sexpr and sexpr.kind == "cons" then
-    -- If we are inside a list, we skip the initial
-    -- '('
-    if nested then
-      s = s .. " "
-    else
-      s = s .. "("
+  -- Objects are their own metatables, so define metamethods here:
+  __tostring = function (sexpr, nested)
+    local s = ""
+    -- A cons list:
+    if sexpr.kind == "cons" then
+      return (nested and " " or "(") ..
+             tostring (sexpr.car) ..
+             Atom.__tostring (sexpr.cdr, true) ..
+             (nested and "" or ")")
     end
-    s = s .. M.tostring (sexpr.car)
 
-    -- Pretty print the CDR part in list mode
-    s = s .. M.tostring (sexpr.cdr, true)
-
-    -- Close with a ')' if we were not in a list mode already
-    if not nested then
-      s = s .. ")"
-    end
-  elseif sexpr then
-    if nested and (sexpr.kind ~= "constant" or sexpr.value ~= "nil") then
+    -- Separator for cdr of a non-list cons cell:
+    if nested and sexpr.kind ~= "nil" then
       s = s .. " . "
     end
-    if sexpr.kind == "function" then
-      if sexpr.special == "macro" then
-        s = s .. "#macro'"
-      else
-        s = s .. "#'"
-      end
-    end
-    -- We just add the value, unless we are a nil in the
-    -- end of a list...
-    if not nested or sexpr.kind ~= "constant" or sexpr.value ~= "nil" then
-      if sexpr.kind == "string" then s = s .. '"' end
-      s = s .. sexpr.value
-      if sexpr.kind == "string" then s = s .. '"' end
-    end
-  end
-  return s
-end
 
-metatable.__tostring = M.tostring
+    -- A function:
+    if sexpr.kind == "function" then
+      s = s .. (sexpr.special == "macro" and "#macro'" or "#'")
+    end
+
+    -- Any other value, except nil at the end of a cons list:
+    if not (nested and sexpr.kind == "nil") then
+      local dq = sexpr.kind == "string" and '"' or ""
+      s = s .. dq .. sexpr.value .. dq
+    end
+    return s
+  end,
+}
+
+M.Nil      = Atom { "nil"; value = "nil" }
+M.T        = Atom { "t";   value = "t"   }
+
+M.Cons     = Atom { "cons";     _init = { "car", "cdr" } }
+M.Function = Atom { "function"; _init = { "value", "func", "special" } }
+M.Number   = Atom { "number";   _init = { "value" } }
+M.Operator = Atom { "operator"; _init = { "value" } }
+M.String   = Atom { "string";   _init = { "value" } }
+M.Symbol   = Atom { "symbol";   _init = { "value" } }
 
 
 
@@ -99,8 +71,9 @@ metatable.__tostring = M.tostring
 
 
 local isconstant = set.new { "nil", "t" }
+local isskipped = set.new { ";", " ", "\t", "\n", "\r" }
 local isoperator = set.new { "(", ")", ",", "'", "`", "." }
-local isdelimiter = set.new { ";", " ", "\t", "\n", "\r", '"' } + isoperator
+local isdelimiter = set.new { '"' } + isskipped + isoperator
 
 
 -- Return the 1-based line number at which offset `i' occurs in `s'.
@@ -117,12 +90,14 @@ local function nextch (s, i)
 end
 
 
--- Lexical scanner: Return three values: `token', `kind', `i', where
--- `token' is the content of the just scanned token, `kind' is the
--- type of token returned, and `i' is the index of the next unscanned
+-- Lexical scanner:
+-- Return two values: `atom', `i', where `atom' is constructed from
+-- the just scanned token, and `i' is the index of the next unscanned
 -- character in `s'.
 local function lex (s, i)
   local c
+
+  -- Skip initial whitespace and comments.
   repeat
     c, i = nextch (s, i)
 
@@ -134,14 +109,14 @@ local function lex (s, i)
     end
 
     -- Continue skipping additional lines of comments and whitespace.
-  until c ~= ' ' and c ~= '\t' and c ~= '\n' and c ~= '\r'
+  until c == nil or not isskipped[c]
 
   -- Return end-of-file immediately.
-  if c == nil then return nil, "eof", i end
+  if c == nil then return nil, "eof" end
 
   -- Return delimiter tokens.
   if isoperator[c] then
-    return c, "operator", i
+    return M.Operator {c}, i
   end
 
   -- Strings start and end with `"'.
@@ -155,34 +130,41 @@ local function lex (s, i)
         error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
       elseif c == '\\' then
         c, i = nextch (s, i)
-	-- `\' can be used to escape `"', `\n' and `\' in strings
-	if c ~= '"' and c ~= '\n' and c ~= '\\' then
-	  token = token .. '\\'
-	end
-	if c ~= '\n' then
-	  token = token .. c
-	end
+        -- `\' can be used to escape `"', `\n' and `\' in strings
+        if c ~= '"' and c ~= '\n' and c ~= '\\' then
+          token = token .. '\\'
+        end
+        if c ~= '\n' then
+          token = token .. c
+        end
       elseif c ~= '"' then
-	token = token .. c
+        token = token .. c
       end
     until c == '"'
 
-    return token, "string", i
+    return M.String {token}, i
   end
 
-  -- Anything else is a `word' - up to the next whitespace or delimiter.
+  -- Anything else is a token of all the characters up to the next
+  -- whitespace or delimiter.
   repeat
     token = token .. c
     c, i = nextch (s, i)
-    if isdelimiter[c] or c == nil then
-      local kind = "symbol"
-      if isconstant[token] then
-        kind = "constant"
+    if c == nil or isdelimiter[c] then
+      -- Literal lisp `nil' or `t' constant:
+      if token == "nil" then
+        return M.Nil, i - 1
+      elseif token == "t" then
+        return M.T, i - 1
+
+      -- A number:
       elseif token:match ("^%d+$") then
-        token = tonumber (token)
-	kind = "number"
+        return M.Number {tonumber (token)}, i - 1
+
+      -- Otherwise a symbol:
+      else
+        return M.Symbol {token}, i - 1
       end
-      return token, kind, i - 1
     end
   until false
 end
@@ -195,63 +177,63 @@ function M.parse (s)
   local read, push
 
   function push (s, start)
-    local token, kind, n = lex (s, start)
-    if kind == "eof" then
+    local atom, n = lex (s, start)
+    if atom == nil then
       error (iton (s, start) .. ": unexpected end-of-file", 0)
     end
 
-    if kind == "operator" then
+    if atom.kind == "operator" then
       -- If the first token is a '.', return the second token.
-      if token == "." then
+      if atom.value == "." then
         local cdr, i = read (s, n)
         -- Skip over the closing ')'.
-        token, kind, n = lex (s, i)
-        if kind == "eof" or token ~= ")" then
+        atom, n = lex (s, i)
+        if atom == nil or atom.kind ~= "operator" or atom.value ~= ")" then
           error (iton (s, n) .. ": missing ')'", 0)
         end
         return cdr, n
 
       -- If the first token is is a ')', return NIL.
-      elseif token == ")" then
-        return M.bool (nil), n
+      elseif atom.value == ")" then
+        return M.Nil, n
       end
     end
 
-    -- Otherwise, get the first Sexpr and CONS it with the rest.
+    -- Otherwise, get the first s-expr and cons it with the rest.
     local car, i = read (s, start)
     local cdr, rest = push (s, i)
-    return M.cons (car, cdr), rest
+    return M.Cons {car, cdr}, rest
   end
 
   function read (s, i)
-    local token, kind, cdr
-    token, kind, i = lex (s, i)
-    if kind == "eof" then
-      return nil, i
+    local atom, cdr
+    atom, i = lex (s, i)
+    if atom == nil then
+      return nil, "eof"
     end
 
-    -- If the first token is a '(', we should expect a "list"
-    if kind == "operator" then
-      if token == "(" then
+    -- If the first token is a '(', expect a list to follow.
+    if atom.kind == "operator" then
+      if atom.value == "(" then
         return push (s, i)
       end
 
       cdr, i = read (s, i)
-      return M.cons (atom (kind, token), cdr), i
+      return M.Cons {atom, cdr}, i
     end
 
-    return atom (kind, token), i
+    return atom, i
   end
 
   local sexpr
-  local sexprList = {}
+  local sexprlist = {}
   repeat
     sexpr, i = read (s, i)
     if sexpr then
-      table.insert (sexprList, sexpr)
+      table.insert (sexprlist, sexpr)
     end
-  until not sexpr
-  return sexprList
+  until sexpr == nil
+  return sexprlist
 end
 
 
@@ -276,7 +258,7 @@ end
 -- Apply an environment and get the substituted S-exp
 function M.applyEnv (env, expr)
   if expr.kind == "cons" then
-    return M.cons (M.applyEnv (env, expr.car), M.applyEnv (env, expr.cdr))
+    return M.Cons {M.applyEnv (env, expr.car), M.applyEnv (env, expr.cdr)}
   elseif expr.kind == "symbol" then
     return env[expr.value] or expr
   end
@@ -299,8 +281,8 @@ local function evalquote (env, sexpr)
     local car = sexpr.car
     if car.kind == "operator" and car.value == "," then
       value = M.evalsexpr (env, sexpr.cdr)
-    else	
-      value = M.cons (evalquote (env, car), evalquote (env, sexpr.cdr))
+    else
+      value = M.Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
     end
   else
     value = sexpr
@@ -313,7 +295,7 @@ end
 local function evalargs (env, list)
   local value
   if list.kind == "cons" then
-    value = M.cons (M.evalsexpr (env, list.car), evalargs (env, list.cdr))
+    value = M.Cons {M.evalsexpr (env, list.car), evalargs (env, list.cdr)}
   else
     value = list
   end
