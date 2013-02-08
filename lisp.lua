@@ -7,7 +7,7 @@
 -- A Scheme parser
 --
 
-require "std"
+require "io_ext"
 
 local M = {}
 
@@ -17,6 +17,8 @@ local M = {}
 --[[ Atoms. ]]--
 --[[ ------ ]]--
 
+
+require "object"
 
 local Atom
 
@@ -69,6 +71,8 @@ M.Symbol   = Atom { "symbol";   _init = { "value" } }
 --[[ Scanner and parser. ]]--
 --[[ ------------------- ]]--
 
+
+require "set"
 
 local isconstant = set.new { "nil", "t" }
 local isskipped = set.new { ";", " ", "\t", "\n", "\r" }
