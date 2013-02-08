@@ -72,8 +72,9 @@ M.Symbol   = Atom { "symbol";   _init = { "value" } }
 
 local isconstant = set.new { "nil", "t" }
 local isskipped = set.new { ";", " ", "\t", "\n", "\r" }
-local isoperator = set.new { "(", ")", ",", "'", "`", "." }
-local isdelimiter = set.new { '"' } + isskipped + isoperator
+local isoperator = set.new { ",", "'", "`" }
+local issyntax = set.new { "(", ".", ")" }
+local isdelimiter = set.new { '"' } + isskipped + isoperator + issyntax
 
 
 -- Return the 1-based line number at which offset `i' occurs in `s'.
@@ -113,6 +114,12 @@ local function lex (s, i)
 
   -- Return end-of-file immediately.
   if c == nil then return nil, "eof" end
+
+  -- Syntax tokens are consumed by parse(), so it is an error for them
+  -- to ever appear in the assembled parse tree; hence `#error' value.
+  if issyntax[c] then
+    return Atom {c; value = "#error"}, i
+  end
 
   -- Return delimiter tokens.
   if isoperator[c] then
@@ -177,61 +184,68 @@ function M.parse (s)
   local read_sexpr, read_list
 
   function read_list (atom)
-    -- When called without an argument, read the next atom here:
-    if atom == nil then atom, i = lex (s, i) end
-
-    -- Parse error: end-of-file between '(' and ')'.
     if atom == nil then
+      -- When called without an argument, read the next atom here:
+      atom, i = lex (s, i)
+    end
+
+    if atom == nil then
+      -- Parse error: end-of-file between '(' and ')'.
       error (iton (s, i) .. ": unexpected end-of-file", 0)
-    end
 
-    if atom.kind == "operator" then
+    elseif atom.kind == ")" then
       -- ')' is the end of the list, return NIL.
-      if atom.value == ")" then
-        return M.Nil
+      return M.Nil
 
+    elseif atom.kind == "." then
       -- '.' separates CAR and CDR, return the following CDR.
-      elseif atom.value == "." then
-        local cdr = read_sexpr ()
-        -- Consume the list closing ')'.
-        local close, n = lex (s, i)
-        if close and close.kind == "operator" and close.value == ")" then
-	  i = n
-	  return cdr
-        end
+      local cdr = read_sexpr ()
 
-	-- Parse error:
-        error (iton (s, i) .. ": missing ')'", 0)
+      -- Consume the list closing ')'.
+      local close, n = lex (s, i)
+      if close and close.kind == ")" then
+	i = n
+	return cdr
       end
-    end
 
-    -- Otherwise, get the first s-expr and cons it with the rest.
-    return M.Cons {read_sexpr (atom), read_list ()}
+      -- Parse error:
+      error (iton (s, i) .. ": missing ')'", 0)
+
+    else
+      -- Otherwise, get the first s-expr and cons it with the rest.
+      return M.Cons {read_sexpr (atom), read_list ()}
+    end
   end
 
   function read_sexpr (atom)
-    -- When called without an argument, read the next atom here:
-    if atom == nil then atom, i = lex (s, i) end
-
-    -- Return from end-of-file immediately.
-    if atom == nil then return nil end
-
-    if atom.kind == "operator" then
-      if atom.value == "(" then
-        -- '(' indicates the beginning of a list.
-        return read_list ()
-      end
-
-      return M.Cons {atom, read_sexpr ()}
+    if atom == nil then
+      -- When called without an argument, read the next atom here:
+      atom, i = lex (s, i)
     end
 
-    return atom
+    if atom == nil then
+      -- Return from end-of-file immediately.
+      return nil
+
+    elseif atom.kind == "(" then
+      -- '(' indicates the beginning of a list.
+      return read_list ()
+
+    elseif atom.kind == "operator" then
+      -- Cons quotes ("'" and "`") and unquote (",") into the s-expr.
+      return M.Cons {atom, read_sexpr ()}
+
+    else
+      -- Otherwise, return the (non-list) s-expr.
+      return atom
+    end
+
+    -- TODO: What about "." and ")"?
   end
 
-  local sexpr
   local sexprlist = {}
   repeat
-    sexpr = read_sexpr ()
+    local sexpr = read_sexpr ()
     if sexpr == nil then break end
     table.insert (sexprlist, sexpr)
   until false
