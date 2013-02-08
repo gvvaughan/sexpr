@@ -174,65 +174,68 @@ end
 -- (unevaluated) S-expr.
 function M.parse (s)
   local i = 0
-  local read, push
+  local read_sexpr, read_list
 
-  function push (s, start)
-    local atom, n = lex (s, start)
+  function read_list (atom)
+    -- When called without an argument, read the next atom here:
+    if atom == nil then atom, i = lex (s, i) end
+
+    -- Parse error: end-of-file between '(' and ')'.
     if atom == nil then
-      error (iton (s, start) .. ": unexpected end-of-file", 0)
+      error (iton (s, i) .. ": unexpected end-of-file", 0)
     end
 
     if atom.kind == "operator" then
-      -- If the first token is a '.', return the second token.
-      if atom.value == "." then
-        local cdr, i = read (s, n)
-        -- Skip over the closing ')'.
-        atom, n = lex (s, i)
-        if atom == nil or atom.kind ~= "operator" or atom.value ~= ")" then
-          error (iton (s, n) .. ": missing ')'", 0)
-        end
-        return cdr, n
+      -- ')' is the end of the list, return NIL.
+      if atom.value == ")" then
+        return M.Nil
 
-      -- If the first token is is a ')', return NIL.
-      elseif atom.value == ")" then
-        return M.Nil, n
+      -- '.' separates CAR and CDR, return the following CDR.
+      elseif atom.value == "." then
+        local cdr = read_sexpr ()
+        -- Consume the list closing ')'.
+        local close, n = lex (s, i)
+        if close and close.kind == "operator" and close.value == ")" then
+	  i = n
+	  return cdr
+        end
+
+	-- Parse error:
+        error (iton (s, i) .. ": missing ')'", 0)
       end
     end
 
     -- Otherwise, get the first s-expr and cons it with the rest.
-    local car, i = read (s, start)
-    local cdr, rest = push (s, i)
-    return M.Cons {car, cdr}, rest
+    return M.Cons {read_sexpr (atom), read_list ()}
   end
 
-  function read (s, i)
-    local atom, cdr
-    atom, i = lex (s, i)
-    if atom == nil then
-      return nil, "eof"
-    end
+  function read_sexpr (atom)
+    -- When called without an argument, read the next atom here:
+    if atom == nil then atom, i = lex (s, i) end
 
-    -- If the first token is a '(', expect a list to follow.
+    -- Return from end-of-file immediately.
+    if atom == nil then return nil end
+
     if atom.kind == "operator" then
       if atom.value == "(" then
-        return push (s, i)
+        -- '(' indicates the beginning of a list.
+        return read_list ()
       end
 
-      cdr, i = read (s, i)
-      return M.Cons {atom, cdr}, i
+      return M.Cons {atom, read_sexpr ()}
     end
 
-    return atom, i
+    return atom
   end
 
   local sexpr
   local sexprlist = {}
   repeat
-    sexpr, i = read (s, i)
-    if sexpr then
-      table.insert (sexprlist, sexpr)
-    end
-  until sexpr == nil
+    sexpr = read_sexpr ()
+    if sexpr == nil then break end
+    table.insert (sexprlist, sexpr)
+  until false
+
   return sexprlist
 end
 
