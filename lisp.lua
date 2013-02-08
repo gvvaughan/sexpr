@@ -59,7 +59,6 @@ local T        = Atom { "t";   value = "t"   }
 local Cons     = Atom { "cons";     _init = { "car", "cdr" } }
 local Function = Atom { "function"; _init = { "value", "func", "special" } }
 local Number   = Atom { "number";   _init = { "value" } }
-local Operator = Atom { "operator"; _init = { "value" } }
 local String   = Atom { "string";   _init = { "value" } }
 local Symbol   = Atom { "symbol";   _init = { "value" } }
 
@@ -72,11 +71,11 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 
 Set = require "fastset"
 
-local isconstant = Set { "nil", "t" }
-local isskipped = Set { ";", " ", "\t", "\n", "\r" }
-local isoperator = Set { ",", "'", "`" }
-local issyntax = Set { "(", ".", ")" }
-local isdelimiter = Set { '"' } + isskipped + isoperator + issyntax
+local isconstant  = Set { "nil", "t" }
+local isskipped   = Set { ";", " ", "\t", "\n", "\r" }
+local isquote     = Set { ",", "'", "`" }
+local isterminal  = Set { "(", ".", ")" } + isquote
+local isdelimiter = Set { '"' } + isskipped + isterminal
 
 
 -- Return the 1-based line number at which offset `i' occurs in `s'.
@@ -119,15 +118,9 @@ local function parse (s)
       -- Continue skipping additional lines of comments and whitespace.
     until not isskipped[c]
 
-    -- Syntax tokens are consumed by parse(), so it is an error for them
-    -- to ever appear in the assembled parse tree; hence `#error' value.
-    if issyntax[c] then
-      return Atom {c; value = "#error"}
-    end
-
     -- Return delimiter tokens.
-    if isoperator[c] then
-      return Operator {c}
+    if isterminal[c] then
+      return Atom {c; value = c}
     end
 
     -- Strings start and end with `"'.
@@ -236,7 +229,7 @@ local function parse (s)
       -- '(' indicates the beginning of a list.
       return read_list ()
 
-    elseif atom.kind == "operator" then
+    elseif isquote[atom.kind] then
       -- Cons quotes ("'" and "`") and unquote (",") into the s-expr.
       return Cons {atom, read_sexpr ()}
 
@@ -303,7 +296,7 @@ function evalquote (env, sexpr)
   end
   if sexpr.kind == "cons" then
     local car = sexpr.car
-    if car.kind == "operator" and car.value == "," then
+    if car.kind == "," then
       value = evalsexpr (env, sexpr.cdr)
     else
       value = Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
@@ -335,9 +328,9 @@ function evalsexpr (env, sexpr)
   if sexpr.kind == "cons" then
     -- 1. Cons cell
     local car = sexpr.car
-    if car.kind == "operator" and car.value == "'" then
+    if car.kind == "'" then
       value = sexpr.cdr
-    elseif car.kind == "operator" and car.value == "`" then
+    elseif car.kind == "`" then
       local cdr = evalquote (env, sexpr.cdr)
       value = cdr
     else
@@ -410,7 +403,6 @@ local public = {
   Function = Function,
   Nil      = Nil,
   Number   = Number,
-  Operator = Operator,
   String   = String,
   Symbol   = Symbol,
   T        = T,
