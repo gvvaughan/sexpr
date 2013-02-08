@@ -9,8 +9,6 @@
 
 require "io_ext"
 
-local M = {}
-
 
 
 --[[ ------ ]]--
@@ -55,15 +53,15 @@ Atom = Object {
   end,
 }
 
-M.Nil      = Atom { "nil"; value = "nil" }
-M.T        = Atom { "t";   value = "t"   }
+local Nil      = Atom { "nil"; value = "nil" }
+local T        = Atom { "t";   value = "t"   }
 
-M.Cons     = Atom { "cons";     _init = { "car", "cdr" } }
-M.Function = Atom { "function"; _init = { "value", "func", "special" } }
-M.Number   = Atom { "number";   _init = { "value" } }
-M.Operator = Atom { "operator"; _init = { "value" } }
-M.String   = Atom { "string";   _init = { "value" } }
-M.Symbol   = Atom { "symbol";   _init = { "value" } }
+local Cons     = Atom { "cons";     _init = { "car", "cdr" } }
+local Function = Atom { "function"; _init = { "value", "func", "special" } }
+local Number   = Atom { "number";   _init = { "value" } }
+local Operator = Atom { "operator"; _init = { "value" } }
+local String   = Atom { "string";   _init = { "value" } }
+local Symbol   = Atom { "symbol";   _init = { "value" } }
 
 
 
@@ -91,9 +89,8 @@ end
 
 -- Call `lex' repeatedly to parse `s', yielding a table of
 -- (unevaluated) S-expr.
-function M.parse (s)
+local function parse (s)
   local i, n = 0, #s
-  local read_sexpr, read_list
 
   -- Increment index into s and return that character.
   local function nextch ()
@@ -130,7 +127,7 @@ function M.parse (s)
 
     -- Return delimiter tokens.
     if isoperator[c] then
-      return M.Operator {c}
+      return Operator {c}
     end
 
     -- Strings start and end with `"'.
@@ -156,7 +153,7 @@ function M.parse (s)
         end
       until c == '"'
 
-      return M.String {token}
+      return String {token}
     end
 
     -- Anything else is a token of all the characters up to the next
@@ -172,23 +169,25 @@ function M.parse (s)
 
         if token == "nil" then
           -- Literal lisp `nil' constant:
-          return M.Nil
+          return Nil
 
         elseif token == "t" then
           -- Literal lisp `t' constant:
-          return M.T
+          return T
 
         elseif token:match ("^%d+$") then
           -- A number:
-          return M.Number {tonumber (token)}
+          return Number {tonumber (token)}
 
         else
           -- Otherwise a symbol:
-          return M.Symbol {token}
+          return Symbol {token}
         end
       end
     until false
   end
+
+  local read_list, read_sexpr
 
   function read_list (atom)
     if atom == nil then
@@ -202,7 +201,7 @@ function M.parse (s)
 
     elseif atom.kind == ")" then
       -- ')' is the end of the list, return NIL.
-      return M.Nil
+      return Nil
 
     elseif atom.kind == "." then
       -- '.' separates CAR and CDR, return the following CDR.
@@ -219,7 +218,7 @@ function M.parse (s)
 
     else
       -- Otherwise, get the first s-expr and cons it with the rest.
-      return M.Cons {read_sexpr (atom), read_list ()}
+      return Cons {read_sexpr (atom), read_list ()}
     end
   end
 
@@ -239,7 +238,7 @@ function M.parse (s)
 
     elseif atom.kind == "operator" then
       -- Cons quotes ("'" and "`") and unquote (",") into the s-expr.
-      return M.Cons {atom, read_sexpr ()}
+      return Cons {atom, read_sexpr ()}
 
     else
       -- Otherwise, return the (non-list) s-expr.
@@ -265,23 +264,23 @@ end
 --[[ ------------- ]]--
 
 
-function M.bind (scope, parms, vals)
+local function bind (scope, parms, vals)
   if parms.kind == "cons" then
     scope[parms.car.value] = vals.car
-    M.bind (scope, parms.cdr, vals.cdr)
+    bind (scope, parms.cdr, vals.cdr)
   end
 end
 
-function M:addBindings (parms, vals)
+local function addBindings (env, parms, vals)
   local scope = {}
-  M.bind (scope, parms, vals)
-  return setmetatable (scope, { __index = self })
+  bind (scope, parms, vals)
+  return setmetatable (scope, { __index = env })
 end
 
 -- Apply an environment and get the substituted S-exp
-function M.applyEnv (env, expr)
+local function applyEnv (env, expr)
   if expr.kind == "cons" then
-    return M.Cons {M.applyEnv (env, expr.car), M.applyEnv (env, expr.cdr)}
+    return Cons {applyEnv (env, expr.car), applyEnv (env, expr.cdr)}
   elseif expr.kind == "symbol" then
     return env[expr.value] or expr
   end
@@ -295,7 +294,9 @@ end
 --[[ --------------- ]]--
 
 
-local function evalquote (env, sexpr)
+local evalquote, evalargs, evalsexpr
+
+function evalquote (env, sexpr)
   local value
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
@@ -303,9 +304,9 @@ local function evalquote (env, sexpr)
   if sexpr.kind == "cons" then
     local car = sexpr.car
     if car.kind == "operator" and car.value == "," then
-      value = M.evalsexpr (env, sexpr.cdr)
+      value = evalsexpr (env, sexpr.cdr)
     else
-      value = M.Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
+      value = Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
     end
   else
     value = sexpr
@@ -315,10 +316,10 @@ end
 
 
 -- Evaluate each item in argument list.
-local function evalargs (env, list)
+function evalargs (env, list)
   local value
   if list.kind == "cons" then
-    value = M.Cons {M.evalsexpr (env, list.car), evalargs (env, list.cdr)}
+    value = Cons {evalsexpr (env, list.car), evalargs (env, list.cdr)}
   else
     value = list
   end
@@ -326,7 +327,7 @@ local function evalargs (env, list)
 end
 
 
-function M.evalsexpr (env, sexpr)
+function evalsexpr (env, sexpr)
   local value
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
@@ -340,7 +341,7 @@ function M.evalsexpr (env, sexpr)
       local cdr = evalquote (env, sexpr.cdr)
       value = cdr
     else
-      local func = M.evalsexpr (env, car)
+      local func = evalsexpr (env, car)
       if not func or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
       end
@@ -371,30 +372,61 @@ end
 
 
 -- Evaluate a string of lisp.
-function M.evalstring (env, s)
-  local t, errmsg = M.parse (s)
+local function evalstring (env, s)
+  local t, errmsg = parse (s)
   if t == nil then
     return nil, errmsg
   end
 
   local result
   for _, sexpr in ipairs (t) do
-    result = M.evalsexpr (env, sexpr)
+    result = evalsexpr (env, sexpr)
   end
   return result
 end
 
 
 -- Evaluate a file of lisp.
-function M.evalfile (env, filename)
+local function evalfile (env, filename)
   local s, errmsg = io.slurp (filename)
 
   if s then
-    s, errmsg = M.evalstring (env, s)
+    s, errmsg = evalstring (env, s)
   end
 
   return s, errmsg
 end
 
 
-return M
+
+--[[ ----------------- ]]--
+--[[ Public Interface. ]]--
+--[[ ----------------- ]]--
+
+
+local public = {
+  -- Atoms:
+  Cons     = Cons,
+  Function = Function,
+  Nil      = Nil,
+  Number   = Number,
+  Operator = Operator,
+  String   = String,
+  Symbol   = Symbol,
+  T        = T,
+
+  -- Parser:
+  parse = parse,
+
+  -- Environments:
+  addBindings = addBindings,
+  applyEnv    = applyEnv,
+  bind        = bind,
+
+  -- Evaluator:
+  evalfile   = evalfile,
+  evalsexpr  = evalsexpr,
+  evalstring = evalstring,
+}
+
+return public
