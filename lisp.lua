@@ -85,17 +85,17 @@ local function iton (s, i)
 end
 
 
--- Increment index into s and return that character.
-local function nextch (s, i)
-  return i < #s and s[i + 1] or nil, i + 1
-end
-
-
 -- Call `lex' repeatedly to parse `s', yielding a table of
 -- (unevaluated) S-expr.
 function M.parse (s)
-  local i = 0
+  local i, n = 0, #s
   local read_sexpr, read_list
+
+  -- Increment index into s and return that character.
+  local function nextch ()
+    i = i + 1
+    if i <= n then return s[i] end
+  end
 
   -- Return the next atom by scanning unconsumed characters of `s'.
   local function lex ()
@@ -103,12 +103,12 @@ function M.parse (s)
 
     -- Skip initial whitespace and comments.
     repeat
-      c, i = nextch (s, i)
+      c = nextch ()
 
       -- Comments start with `;'.
       if c == ';' then
         repeat
-          c, i = nextch (s, i)
+          c = nextch ()
         until c == '\n' or c == '\r' or c == nil
       end
 
@@ -135,11 +135,11 @@ function M.parse (s)
     local token = ''
     if c == '"' then
       repeat
-        c, i = nextch (s, i)
+        c = nextch ()
         if c == nil then
           error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
         elseif c == '\\' then
-          c, i = nextch (s, i)
+          c = nextch ()
           -- `\' can be used to escape `"', `\n' and `\' in strings
           if c ~= '"' and c ~= '\n' and c ~= '\\' then
             token = token .. '\\'
@@ -159,7 +159,7 @@ function M.parse (s)
     -- whitespace or delimiter.
     repeat
       token = token .. c
-      c, i = nextch (s, i)
+      c = nextch ()
       if c == nil or isdelimiter[c] then
 	if not isskipped[c] then
 	  -- Don't consume non-skippable characters.
@@ -205,13 +205,13 @@ function M.parse (s)
       local cdr = read_sexpr ()
 
       -- Consume the list closing ')'.
-      local n, close = i, lex ()
+      local j, close = i, lex ()
       if close and close.kind == ")" then
 	return cdr
       end
 
       -- Parse error:
-      error (iton (s, n) .. ": missing ')'", 0)
+      error (iton (s, j) .. ": missing ')'", 0)
 
     else
       -- Otherwise, get the first s-expr and cons it with the rest.
