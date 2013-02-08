@@ -112,11 +112,11 @@ function M.parse (s)
         until c == '\n' or c == '\r' or c == nil
       end
 
-      -- Continue skipping additional lines of comments and whitespace.
-    until c == nil or not isskipped[c]
+      -- Return end-of-file immediately.
+      if c == nil then return nil end
 
-    -- Return end-of-file immediately.
-    if c == nil then return nil end
+      -- Continue skipping additional lines of comments and whitespace.
+    until not isskipped[c]
 
     -- Syntax tokens are consumed by parse(), so it is an error for them
     -- to ever appear in the assembled parse tree; hence `#error' value.
