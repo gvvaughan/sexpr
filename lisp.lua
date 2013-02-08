@@ -70,13 +70,13 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 --[[ ------------------- ]]--
 
 
-require "set"
+Set = require "fastset"
 
-local isconstant = set.new { "nil", "t" }
-local isskipped = set.new { ";", " ", "\t", "\n", "\r" }
-local isoperator = set.new { ",", "'", "`" }
-local issyntax = set.new { "(", ".", ")" }
-local isdelimiter = set.new { '"' } + isskipped + isoperator + issyntax
+local isconstant = Set { "nil", "t" }
+local isskipped = Set { ";", " ", "\t", "\n", "\r" }
+local isoperator = Set { ",", "'", "`" }
+local issyntax = Set { "(", ".", ")" }
+local isdelimiter = Set { '"' } + isskipped + isoperator + issyntax
 
 
 -- Return the 1-based line number at which offset `i' occurs in `s'.
