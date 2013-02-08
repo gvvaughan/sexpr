@@ -1,19 +1,38 @@
--- This software is licensed under the M.I.T. license.
--- The license text is found in "license.txt"
+-- A lisp parser and evaluator.
 --
--- lisp.lua
--- Author: David Bergman
+-- Copyright (c) 2013 Free Software Foundation, Inc.
+-- Written by Gary V. Vaughan, 2013
 --
--- A Scheme parser
+-- This program is free software; you can redistribute it and/or modify it
+-- under the terms of the GNU General Public License as published by
+-- the Free Software Foundation; either version 3, or (at your option)
+-- any later version.
 --
+-- This program is distributed in the hope that it will be useful, but
+-- WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-- General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with this program; see the file COPYING.  If not, write to the
+-- Free Software Foundation, Fifth Floor, 51 Franklin Street, Boston,
+-- MA 02111-1301, USA.
+
 
 require "io_ext"
 
 
 
---[[ ------ ]]--
---[[ Atoms. ]]--
---[[ ------ ]]--
+--[[ ----------- ]]--
+--[[ Lisp Atoms. ]]--
+--[[ ----------- ]]--
+
+-- The parser returns a Lua list of s-expressions built from
+-- the following atoms.  Nil and T are singletons so that
+-- equality checks do the right thing, and some syntactical
+-- tokens such as quotes and commas are cloned directly from
+-- the Atom prototype object with `kind' set to the terminal
+-- character.
 
 
 require "object"
@@ -23,10 +42,8 @@ local Atom
 Atom = Object {
   _init = { "kind" },
 
-  -- Objects are their own metatables, so define metamethods here:
   __tostring = function (sexpr, nested)
     local s = ""
-    -- A cons list:
     if sexpr.kind == "cons" then
       return (nested and " " or "(") ..
              tostring (sexpr.car) ..
@@ -34,17 +51,15 @@ Atom = Object {
              (nested and "" or ")")
     end
 
-    -- Separator for cdr of a non-list cons cell:
     if nested and sexpr.kind ~= "nil" then
       s = s .. " . "
     end
 
-    -- A function:
     if sexpr.kind == "function" then
       s = s .. (sexpr.special == "macro" and "#macro'" or "#'")
     end
 
-    -- Any other value, except nil at the end of a cons list:
+    -- Ignore the nil at the end of a cons list.
     if not (nested and sexpr.kind == "nil") then
       local dq = sexpr.kind == "string" and '"' or ""
       s = s .. dq .. sexpr.value .. dq
@@ -68,6 +83,16 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 --[[ Scanner and parser. ]]--
 --[[ ------------------- ]]--
 
+-- The parser is a closure over the lex function, and several
+-- helpers, which allows them all to reference the shared state
+-- of the parser in the closure to simplify the implementation.
+-- parse () adds s-expressions of Atoms to a list by calling
+-- read_sexpr () and read_list () recursively.  The each call
+-- lex () to collect Atoms, which are tokenized by lex (). The
+-- nextch () function keeps track of where in the string parsing
+-- has reached, and passes characters to lex () one at a time
+-- as it decides what Atoms to produce for the parser.
+
 
 Set = require "fastset"
 
@@ -77,7 +102,7 @@ local isterminal  = Set { "(", ".", ")" } + isquote
 local isdelimiter = Set { '"' } + isskipped + isterminal
 
 
--- Return the 1-based line number at which offset `i' occurs in `s'.
+-- Return the line-number at which index I occurs in S.
 local function iton (s, i)
   local n = 1
   for _ in string.gmatch (s:sub (1, i), "\n") do n = n + 1 end
@@ -85,46 +110,37 @@ local function iton (s, i)
 end
 
 
--- Call `lex' repeatedly to parse `s', yielding a table of
--- (unevaluated) S-expr.
+-- Parse S, a string of lisp code, returning a list of (unevaluated)
+-- s-expressions.
 local function parse (s)
   local i, n = 0, #s
 
-  -- Increment index into s and return that character.
   local function nextch ()
     i = i + 1
     if i <= n then return s[i] end
   end
 
-  -- Return the next atom by scanning unconsumed characters of `s'.
+  -- Tokenizer.
   local function lex ()
     local c
 
-    -- Skip initial whitespace and comments.
+    -- Skip whitespace and comments.
     repeat
       c = nextch ()
-
-      -- Comments start with `;'.
       if c == ';' then
         repeat
           c = nextch ()
         until c == '\n' or c == '\r' or c == nil
       end
-
-      -- Return end-of-file immediately.
       if c == nil then return nil end
-
-      -- Continue skipping additional lines of comments and whitespace.
     until not isskipped[c]
 
-    -- Return delimiter tokens.
+    -- Return terminal tokens in an Atom `kind' field.
     if isterminal[c] then
       return Atom {c; value = c}
     end
 
     -- Strings start and end with `"'.
-    -- Note we read another character immediately to skip the opening
-    -- quote, and don't append the closing quote to the returned token.
     local token = ''
     if c == '"' then
       repeat
@@ -133,7 +149,7 @@ local function parse (s)
           error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
         elseif c == '\\' then
           c = nextch ()
-          -- `\' can be used to escape `"', `\n' and `\' in strings
+          -- `\' can be used to escape `"', `\n' and `\' in strings.
           if c ~= '"' and c ~= '\n' and c ~= '\\' then
             token = token .. '\\'
           end
@@ -148,8 +164,7 @@ local function parse (s)
       return String {token}
     end
 
-    -- Anything else is a token of all the characters up to the next
-    -- whitespace or delimiter.
+    -- Everything else!
     repeat
       token = token .. c
       c = nextch ()
@@ -160,32 +175,25 @@ local function parse (s)
 	end
 
         if token == "nil" then
-          -- Literal lisp `nil' constant:
           return Nil
 
         elseif token == "t" then
-          -- Literal lisp `t' constant:
           return T
 
         elseif token:match ("^%d+$") then
-          -- A number:
           return Number {tonumber (token)}
 
         else
-          -- Otherwise a symbol:
           return Symbol {token}
         end
       end
     until false
   end
 
-  local read_list, read_sexpr
+  local read_list, read_sexpr -- mutually recursive functions
 
   function read_list (atom)
-    if atom == nil then
-      -- When called without an argument, read the next atom here:
-      atom = lex ()
-    end
+    atom = atom or lex ()
 
     if atom == nil then
       -- Parse error: end-of-file between '(' and ')'.
@@ -199,15 +207,13 @@ local function parse (s)
       -- '.' separates CAR and CDR, return the following CDR.
       local cdr = read_sexpr ()
 
-      -- Consume the list closing ')'.
+      -- Consume the list-closing ')'.
       local j, close = i, lex ()
       if close and close.kind == ")" then
 	return cdr
       end
 
-      -- Parse error:
       error (iton (s, j) .. ": missing ')'", 0)
-
     else
       -- Otherwise, get the first s-expr and cons it with the rest.
       return Cons {read_sexpr (atom), read_list ()}
@@ -215,25 +221,19 @@ local function parse (s)
   end
 
   function read_sexpr (atom)
-    if atom == nil then
-      -- When called without an argument, read the next atom here:
-      atom = lex ()
-    end
+    atom = atom or lex ()
 
     if atom == nil then
-      -- Return from end-of-file immediately.
+      -- No more Atoms.
       return nil
 
     elseif atom.kind == "(" then
-      -- '(' indicates the beginning of a list.
       return read_list ()
 
     elseif isquote[atom.kind] then
-      -- Cons quotes ("'" and "`") and unquote (",") into the s-expr.
       return Cons {atom, read_sexpr ()}
 
     else
-      -- Otherwise, return the (non-list) s-expr.
       return atom
     end
 
@@ -251,9 +251,13 @@ local function parse (s)
 end
 
 
+
 --[[ ------------- ]]--
 --[[ Environments. ]]--
 --[[ ------------- ]]--
+
+-- Environments are nested symbol tables used to provide scopes
+-- in which symbol values are stored and looked up.
 
 
 local function bind (scope, parms, vals)
@@ -285,9 +289,16 @@ end
 --[[ Lisp Evaluator. ]]--
 --[[ --------------- ]]--
 
+-- The main function here is evalsexpr () which substitutes symbol
+-- names for values and/or calls functions according to the active
+-- environment.  evalstring () and evalfile () are convenience
+-- wrappers for evalsexpr (), and the rest are helper functions.
+
 
 local evalquote, evalargs, evalsexpr
 
+
+-- Evaluate only "," sub-epressions of quoted SEXPR inside ENV.
 function evalquote (env, sexpr)
   local value
   if not sexpr.kind then
@@ -307,7 +318,7 @@ function evalquote (env, sexpr)
 end
 
 
--- Evaluate each item in argument list.
+-- Evaluate each item in argument LIST inside ENV.
 function evalargs (env, list)
   local value
   if list.kind == "cons" then
@@ -319,20 +330,25 @@ function evalargs (env, list)
 end
 
 
+-- Evaluate SEXPR inside ENV.
 function evalsexpr (env, sexpr)
   local value
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
   if sexpr.kind == "cons" then
-    -- 1. Cons cell
     local car = sexpr.car
     if car.kind == "'" then
+      -- A quoted expression is protected from further evaluation.
       value = sexpr.cdr
+
     elseif car.kind == "`" then
+      -- Comma expressions inside a back-quoted expression ARE evaluated.
       local cdr = evalquote (env, sexpr.cdr)
       value = cdr
+
     else
+      -- Otherwise the first symbol of a CONS list should be a function.
       local func = evalsexpr (env, car)
       if not func or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
@@ -350,13 +366,11 @@ function evalsexpr (env, sexpr)
       value = func.func (env, args)
     end
   elseif sexpr.kind == "symbol" then
-    -- a. symbol
     value = env[sexpr.value]
     if not value then
       error ("undefined symbol '" .. sexpr.value .. "'", 0)
     end
   else
-    -- b. constant
     value = sexpr
   end
   return value
@@ -395,9 +409,10 @@ end
 --[[ Public Interface. ]]--
 --[[ ----------------- ]]--
 
+-- Return a table of the public interface to this file.
 
 local public = {
-  -- Atoms:
+  -- Lisp Atoms:
   Cons     = Cons,
   Function = Function,
   Nil      = Nil,
