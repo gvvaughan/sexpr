@@ -101,9 +101,8 @@ Primitive ("defmacro",
     local params = sexpr.cdr.car
     local body   = sexpr.cdr.cdr.car
     local macro  = function (env2, args)
-                     local scope = {}
-                     lisp.bind (scope, params, args)
-                     local applied = lisp.applyEnv (scope, body)
+                     local scope = lisp.env_bind ({}, params, args)
+                     local applied = lisp.env_apply (scope, body)
                      return lisp.evalsexpr (env2, applied)
                    end
     local func = lisp_function {
@@ -164,8 +163,9 @@ Primitive ("lambda",
       string.format ("(lambda %s %s)", tostring (formalParams),
                      tostring (body)),
       function (env2, actualParams)
-        local localEnv = lisp.addBindings (env, formalParams, actualParams)
-        return lisp.evalsexpr (localEnv, body)
+        local scope = lisp.env_push (env)
+        lisp.env_bind (scope, formalParams, actualParams)
+        return lisp.evalsexpr (scope, body)
       end
     }
   end

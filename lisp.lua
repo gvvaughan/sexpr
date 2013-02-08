@@ -266,27 +266,30 @@ end
 -- in which symbol values are stored and looked up.
 
 
-local function bind (scope, parms, vals)
-  if parms.kind == "cons" then
-    scope[parms.car.value] = vals.car
-    bind (scope, parms.cdr, vals.cdr)
+-- Recursively bind arguments to parameters within ENV.
+local function env_bind (env, paramlist, arglist)
+  if paramlist.kind ~= "cons" then
+    return env
   end
+  env[paramlist.car.value] = arglist.car
+  return env_bind (env, paramlist.cdr, arglist.cdr)
 end
 
-local function addBindings (env, parms, vals)
-  local scope = {}
-  bind (scope, parms, vals)
-  return setmetatable (scope, { __index = env })
+
+-- Return a new local environment pushed on top of ENV.
+local function env_push (env)
+  return setmetatable ({}, { __index = env })
 end
 
--- Apply an environment and get the substituted S-exp
-local function applyEnv (env, expr)
-  if expr.kind == "cons" then
-    return Cons {applyEnv (env, expr.car), applyEnv (env, expr.cdr)}
-  elseif expr.kind == "symbol" then
-    return env[expr.value] or expr
+
+-- Evaluate SEXPR by substituting symbols looked up in ENV.
+local function env_apply (env, sexpr)
+  if sexpr.kind == "cons" then
+    return Cons {env_apply (env, sexpr.car), env_apply (env, sexpr.cdr)}
+  elseif sexpr.kind == "symbol" then
+    return env[sexpr.value] or sexpr
   end
-  return expr
+  return sexpr
 end
 
 
@@ -431,9 +434,9 @@ local public = {
   parse = parse,
 
   -- Environments:
-  addBindings = addBindings,
-  applyEnv    = applyEnv,
-  bind        = bind,
+  env_apply = env_apply,
+  env_bind  = env_bind,
+  env_push  = env_push,
 
   -- Evaluator:
   evalfile   = evalfile,
