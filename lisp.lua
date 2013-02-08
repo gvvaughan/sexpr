@@ -115,6 +115,12 @@ end
 local function parse (s)
   local i, n = 0, #s
 
+  local function parse_error (errmsg, index)
+    index = index or i
+    -- Final 0 argument means not to append Lua backtrace texts.
+    error (iton (s, index) .. ": " .. errmsg, 0)
+  end
+
   local function nextch ()
     i = i + 1
     if i <= n then return s[i] end
@@ -146,7 +152,7 @@ local function parse (s)
       repeat
         c = nextch ()
         if c == nil then
-          error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
+          parse_error ('incomplete string: "' .. token, i - 1)
         elseif c == '\\' then
           c = nextch ()
           -- `\' can be used to escape `"', `\n' and `\' in strings.
@@ -196,8 +202,8 @@ local function parse (s)
     atom = atom or lex ()
 
     if atom == nil then
-      -- Parse error: end-of-file between '(' and ')'.
-      error (iton (s, i) .. ": unexpected end-of-file", 0)
+      -- reached end-of-file between '(' and ')'.
+      parse_error "unexpected end-of-file"
 
     elseif atom.kind == ")" then
       -- ')' is the end of the list, return NIL.
@@ -213,7 +219,7 @@ local function parse (s)
 	return cdr
       end
 
-      error (iton (s, j) .. ": missing ')'", 0)
+      parse_error ("missing ')'", j)
     else
       -- Otherwise, get the first s-expr and cons it with the rest.
       return Cons {read_sexpr (atom), read_list ()}
