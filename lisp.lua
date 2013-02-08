@@ -71,7 +71,6 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 
 Set = require "fastset"
 
-local isconstant  = Set { "nil", "t" }
 local isskipped   = Set { ";", " ", "\t", "\n", "\r" }
 local isquote     = Set { ",", "'", "`" }
 local isterminal  = Set { "(", ".", ")" } + isquote
