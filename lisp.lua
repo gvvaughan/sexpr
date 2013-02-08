@@ -309,39 +309,32 @@ local evalquote, evalargs, evalsexpr
 
 -- Evaluate only "," sub-epressions of quoted SEXPR inside ENV.
 function evalquote (env, sexpr)
-  local value
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
   if sexpr.kind == "cons" then
     local car = sexpr.car
     if car.kind == "," then
-      value = evalsexpr (env, sexpr.cdr)
+      return evalsexpr (env, sexpr.cdr)
     else
-      value = Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
+      return Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
     end
-  else
-    value = sexpr
   end
-  return value
+  return sexpr
 end
 
 
 -- Evaluate each item in argument LIST inside ENV.
 function evalargs (env, list)
-  local value
-  if list.kind == "cons" then
-    value = Cons {evalsexpr (env, list.car), evalargs (env, list.cdr)}
-  else
-    value = list
+  if list.kind ~= "cons" then
+    return list
   end
-  return value
+  return Cons {evalsexpr (env, list.car), evalargs (env, list.cdr)}
 end
 
 
 -- Evaluate SEXPR inside ENV.
 function evalsexpr (env, sexpr)
-  local value
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
@@ -349,17 +342,16 @@ function evalsexpr (env, sexpr)
     local car = sexpr.car
     if car.kind == "'" then
       -- A quoted expression is protected from further evaluation.
-      value = sexpr.cdr
+      return sexpr.cdr
 
     elseif car.kind == "`" then
       -- Comma expressions inside a back-quoted expression ARE evaluated.
-      local cdr = evalquote (env, sexpr.cdr)
-      value = cdr
+      return evalquote (env, sexpr.cdr)
 
     else
       -- Otherwise the first symbol of a CONS list should be a function.
       local func = evalsexpr (env, car)
-      if not func or func.kind ~= "function" then
+      if func == nil or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
       end
 
@@ -372,17 +364,18 @@ function evalsexpr (env, sexpr)
       else
         args = evalargs (env, sexpr.cdr)
       end
-      value = func.func (env, args)
+      return func.func (env, args)
     end
+
   elseif sexpr.kind == "symbol" then
-    value = env[sexpr.value]
-    if not value then
-      error ("undefined symbol '" .. sexpr.value .. "'", 0)
+    local value = env[sexpr.value]
+    if value ~= nil then
+      return value
     end
-  else
-    value = sexpr
+    error ("undefined symbol '" .. sexpr.value .. "'", 0)
   end
-  return value
+
+  return sexpr
 end
 
 
