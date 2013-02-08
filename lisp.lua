@@ -91,102 +91,101 @@ local function nextch (s, i)
 end
 
 
--- Lexical scanner:
--- Return two values: `atom', `i', where `atom' is constructed from
--- the just scanned token, and `i' is the index of the next unscanned
--- character in `s'.
-local function lex (s, i)
-  local c
-
-  -- Skip initial whitespace and comments.
-  repeat
-    c, i = nextch (s, i)
-
-    -- Comments start with `;'.
-    if c == ';' then
-      repeat
-        c, i = nextch (s, i)
-      until c == '\n' or c == '\r' or c == nil
-    end
-
-    -- Continue skipping additional lines of comments and whitespace.
-  until c == nil or not isskipped[c]
-
-  -- Return end-of-file immediately.
-  if c == nil then return nil, "eof" end
-
-  -- Syntax tokens are consumed by parse(), so it is an error for them
-  -- to ever appear in the assembled parse tree; hence `#error' value.
-  if issyntax[c] then
-    return Atom {c; value = "#error"}, i
-  end
-
-  -- Return delimiter tokens.
-  if isoperator[c] then
-    return M.Operator {c}, i
-  end
-
-  -- Strings start and end with `"'.
-  -- Note we read another character immediately to skip the opening
-  -- quote, and don't append the closing quote to the returned token.
-  local token = ''
-  if c == '"' then
-    repeat
-      c, i = nextch (s, i)
-      if c == nil then
-        error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
-      elseif c == '\\' then
-        c, i = nextch (s, i)
-        -- `\' can be used to escape `"', `\n' and `\' in strings
-        if c ~= '"' and c ~= '\n' and c ~= '\\' then
-          token = token .. '\\'
-        end
-        if c ~= '\n' then
-          token = token .. c
-        end
-      elseif c ~= '"' then
-        token = token .. c
-      end
-    until c == '"'
-
-    return M.String {token}, i
-  end
-
-  -- Anything else is a token of all the characters up to the next
-  -- whitespace or delimiter.
-  repeat
-    token = token .. c
-    c, i = nextch (s, i)
-    if c == nil or isdelimiter[c] then
-      -- Literal lisp `nil' or `t' constant:
-      if token == "nil" then
-        return M.Nil, i - 1
-      elseif token == "t" then
-        return M.T, i - 1
-
-      -- A number:
-      elseif token:match ("^%d+$") then
-        return M.Number {tonumber (token)}, i - 1
-
-      -- Otherwise a symbol:
-      else
-        return M.Symbol {token}, i - 1
-      end
-    end
-  until false
-end
-
-
 -- Call `lex' repeatedly to parse `s', yielding a table of
 -- (unevaluated) S-expr.
 function M.parse (s)
   local i = 0
   local read_sexpr, read_list
 
+  -- Lexical scanner:
+  -- Return two values: `atom', `i', where `atom' is constructed from
+  -- the just scanned token, and `i' is the index of the next unscanned
+  -- character in `s'.
+  local function lex (i)
+    local c
+
+    -- Skip initial whitespace and comments.
+    repeat
+      c, i = nextch (s, i)
+
+      -- Comments start with `;'.
+      if c == ';' then
+        repeat
+          c, i = nextch (s, i)
+        until c == '\n' or c == '\r' or c == nil
+      end
+
+      -- Continue skipping additional lines of comments and whitespace.
+    until c == nil or not isskipped[c]
+
+    -- Return end-of-file immediately.
+    if c == nil then return nil, "eof" end
+
+    -- Syntax tokens are consumed by parse(), so it is an error for them
+    -- to ever appear in the assembled parse tree; hence `#error' value.
+    if issyntax[c] then
+      return Atom {c; value = "#error"}, i
+    end
+
+    -- Return delimiter tokens.
+    if isoperator[c] then
+      return M.Operator {c}, i
+    end
+
+    -- Strings start and end with `"'.
+    -- Note we read another character immediately to skip the opening
+    -- quote, and don't append the closing quote to the returned token.
+    local token = ''
+    if c == '"' then
+      repeat
+        c, i = nextch (s, i)
+        if c == nil then
+          error (iton (s, i - 1) .. ': incomplete string: "' .. token, 0)
+        elseif c == '\\' then
+          c, i = nextch (s, i)
+          -- `\' can be used to escape `"', `\n' and `\' in strings
+          if c ~= '"' and c ~= '\n' and c ~= '\\' then
+            token = token .. '\\'
+          end
+          if c ~= '\n' then
+            token = token .. c
+          end
+        elseif c ~= '"' then
+          token = token .. c
+        end
+      until c == '"'
+
+      return M.String {token}, i
+    end
+
+    -- Anything else is a token of all the characters up to the next
+    -- whitespace or delimiter.
+    repeat
+      token = token .. c
+      c, i = nextch (s, i)
+      if c == nil or isdelimiter[c] then
+        -- Literal lisp `nil' or `t' constant:
+        if token == "nil" then
+          return M.Nil, i - 1
+        elseif token == "t" then
+          return M.T, i - 1
+
+        -- A number:
+        elseif token:match ("^%d+$") then
+          return M.Number {tonumber (token)}, i - 1
+
+        -- Otherwise a symbol:
+        else
+          return M.Symbol {token}, i - 1
+        end
+      end
+    until false
+  end
+
   function read_list (atom)
     if atom == nil then
       -- When called without an argument, read the next atom here:
-      atom, i = lex (s, i)
+      atom, i = lex (i)
     end
 
     if atom == nil then
@@ -202,7 +201,7 @@ function M.parse (s)
       local cdr = read_sexpr ()
 
       -- Consume the list closing ')'.
-      local close, n = lex (s, i)
+      local close, n = lex (i)
       if close and close.kind == ")" then
 	i = n
 	return cdr
@@ -220,7 +219,7 @@ function M.parse (s)
   function read_sexpr (atom)
     if atom == nil then
       -- When called without an argument, read the next atom here:
-      atom, i = lex (s, i)
+      atom, i = lex (i)
     end
 
     if atom == nil then
