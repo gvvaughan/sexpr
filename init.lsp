@@ -36,8 +36,5 @@
 (defun >= (x y)
   (<= y x))
 
-(defun - (x y)
-  (+ x (neg y)))
-
 (defun nullp (x)
   (eq x nil))
