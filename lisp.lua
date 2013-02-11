@@ -35,7 +35,7 @@ require "io_ext"
 -- character.
 
 
-require "object"
+local Object = require "object"
 
 local Atom
 
@@ -94,12 +94,18 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 -- as it decides what Atoms to produce for the parser.
 
 
-Set = require "fastset"
+local set = require "set"
 
-local isskipped   = Set { ";", " ", "\t", "\n", "\r" }
-local isquote     = Set { ",", "'", "`" }
-local isterminal  = Set { "(", ".", ")" } + isquote
-local isdelimiter = Set { '"' } + isskipped + isterminal
+local isskipped   = set.new { ";", " ", "\t", "\n", "\r" }
+local isquote     = set.new { ",", "'", "`" }
+local isterminal  = set.new { "(", ".", ")" } + isquote
+local isdelimiter = set.new { '"' } + isskipped + isterminal
+
+-- For access speed, discard the wrappers and metatables.
+isskipped   = isskipped.contents
+isquote     = isquote.contents
+isterminal  = isterminal.contents
+isdelimiter = isdelimiter.contents
 
 
 -- Return the line-number at which index I occurs in S.
