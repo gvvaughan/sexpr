@@ -245,11 +245,13 @@ local function parse (s)
     elseif isquote[atom.kind] then
       return Cons {atom, read_sexpr ()}
 
+    elseif isterminal[atom.kind] then
+      -- Raise an error for terminals not handled above.
+      parse_error ("unexpected '" .. atom.kind .. "'")
+
     else
       return atom
     end
-
-    -- TODO: What about "." and ")"?
   end
 
   local sexprlist = {}
