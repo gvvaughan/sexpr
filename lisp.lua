@@ -245,6 +245,9 @@ local function parse (s)
     elseif isquote[atom.kind] then
       return Cons {atom, read_sexpr ()}
 
+    elseif atom.kind == ")" then
+      parse_error "unmatched ')'"
+
     elseif isterminal[atom.kind] then
       -- Raise an error for terminals not handled above.
       parse_error ("unexpected '" .. atom.kind .. "'")
