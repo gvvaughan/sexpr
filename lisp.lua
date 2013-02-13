@@ -79,6 +79,30 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 
 
 
+--[[ ---------- ]]--
+--[[ Utilities. ]]--
+--[[ ---------- ]]--
+
+
+local append
+
+-- Return a single list containing the elements of all the arguments.
+-- The last argument is not copied, just used as the tail of the new list.
+function append (first, rest)
+  if rest.cdr ~= Nil and rest.cdr.car.kind == "cons" then
+    -- Concatenate REST to a single list.
+    rest = Cons {append (rest.car, rest.cdr), Nil}
+  end
+  if first == Nil then
+    return rest.car
+  elseif first.kind ~= "cons" then
+    error ("non-sequence argument to append: " .. tostring (first), 0)
+  end
+  return Cons {first.car, append (first.cdr, rest)}
+end
+
+
+
 --[[ ------------------- ]]--
 --[[ Scanner and parser. ]]--
 --[[ ------------------- ]]--
@@ -97,7 +121,7 @@ local Symbol   = Atom { "symbol";   _init = { "value" } }
 local set = require "set"
 
 local isskipped   = set.new { ";", " ", "\t", "\n", "\r" }
-local isquote     = set.new { ",", "'", "`" }
+local isquote     = set.new { ",", ",@", "'", "`" }
 local isterminal  = set.new { "(", ".", ")" } + isquote
 local isdelimiter = set.new { '"' } + isskipped + isterminal
 
@@ -146,6 +170,17 @@ local function parse (s)
       end
       if c == nil then return nil end
     until not isskipped[c]
+
+    -- Look ahead for potential ,@ token.
+    if c == "," then
+      local lookahead = nextch ()
+      if lookahead == "@" then
+        return Atom {",@"; value = ",@"}
+      end
+
+      -- Not a ",@", so fall through to terminal token handler.
+      i = i - 1
+    end
 
     -- Return terminal tokens in an Atom `kind' field.
     if isterminal[c] then
@@ -318,15 +353,19 @@ end
 local evalquote, evalargs, evalsexpr
 
 
--- Evaluate only "," sub-epressions of quoted SEXPR inside ENV.
+-- Evaluate only escaped sub-expressions of quoted SEXPR inside ENV.
 function evalquote (env, sexpr)
-  if not sexpr.kind then
-    error ("invalid s-expr: " .. tostring (sexpr), 0)
-  end
   if sexpr.kind == "cons" then
     local car = sexpr.car
     if car.kind == "," then
+      -- Unquote s-expression following "," operator.
       return evalsexpr (env, sexpr.cdr)
+
+    elseif car.kind == "cons" and car.car.kind == ",@" then
+      -- Splice s-expression following ",@" operator.
+      local rest = Cons {evalquote (env, sexpr.cdr), Nil}
+      return append (evalsexpr (env, car.cdr), rest)
+
     else
       return Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
     end
@@ -433,6 +472,9 @@ local public = {
   String   = String,
   Symbol   = Symbol,
   T        = T,
+
+  -- Utilities:
+  append   = append,
 
   -- Parser:
   parse = parse,
