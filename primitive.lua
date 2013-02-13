@@ -105,6 +105,36 @@ Primitive ("<",
 )
 
 
+-- (append &rest LISTS)
+-- Concatenate all the arguments and make the result a list.
+-- Return a list whose elements are the elements of all the arguments.
+-- The last argument is not copied, just used as the tail of the new list.
+local function _append (first, rest)
+  if rest.cdr ~= Nil and rest.cdr.car.kind == "cons" then
+    -- Concatenate REST to a single list.
+    rest = Cons {_append (rest.car, rest.cdr), Nil}
+  end
+  if first == Nil then
+    return rest.car
+  elseif first.kind ~= "cons" then
+    error ("non-sequence argument to append: "..tostring (first), 0)
+  end
+  return Cons {first.car, _append (first.cdr, rest)}
+end
+
+Primitive ("append",
+  function (env, args)
+    if args == Nil then
+      return Nil
+    elseif args.cdr == Nil then
+      return args.car
+    else
+      return _append (args.car, args.cdr)
+    end
+  end
+)
+
+
 -- (car LIST)
 -- Return the car of LIST.  If LIST is nil, return nil.
 Primitive ("car",
