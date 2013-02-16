@@ -23,6 +23,8 @@
 
 require "strict" -- from lua-stdlib
 
+package.path = "src/?.lua;" .. package.path
+
 local primitive = require "primitive"
 local lisp = require "lisp"
 
