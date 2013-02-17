@@ -61,8 +61,12 @@ Atom = Object {
 
     -- Ignore the nil at the end of a cons list.
     if not (nested and sexpr.kind == "nil") then
-      local dq = sexpr.kind == "string" and '"' or ""
-      s = s .. dq .. sexpr.value .. dq
+      if sexpr.kind == "string" then
+        -- Quote and escape a string properly.
+        s = s .. string.format ('"%s"', sexpr.value:gsub ('["\\]', "\\%0"))
+      else
+        s = s .. sexpr.value
+      end
     end
     return s
   end,

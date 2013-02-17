@@ -50,8 +50,12 @@ describe "with the Atom prototype" do
     it "should stringify to its value enclosed by quotes" do
       expect (tostring (atom)).should_be (display_syntax)
     end
-    it "should escape quote marks within the contained value"
-    it "should escape backslashes within the contained value"
+    it "should escape quote marks within the contained value" do
+      expect (tostring (lisp.String {'escaped "'})).should_be ([["escaped \""]])
+    end
+    it "should escape backslashes within the contained value" do
+      expect (tostring (lisp.String {[[escaped \]]})).should_be ([["escaped \\"]])
+    end
   end
 
   describe "when constructing a Symbol atom" do
