@@ -154,7 +154,7 @@ local function parse (s)
   local function parse_error (errmsg, index)
     index = index or i
     -- Final 0 argument means not to append Lua backtrace texts.
-    error (iton (s, index) .. ": " .. errmsg, 0)
+    error (iton (s, index) .. ": parse error: " .. errmsg, 0)
   end
 
   local function nextch ()

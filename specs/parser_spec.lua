@@ -2,6 +2,9 @@ local lisp = require "lisp"
 
 describe "with the lisp parser" do
   describe "when scanning its input" do
+    it "should return an empty table for no input" do
+      expect (lisp.parse ("")).should_equal {}
+    end
     it "should skip white space" do
       expect (lisp.parse (" \t\n\rt \t\n\r")).should_equal {lisp.T}
     end
@@ -67,14 +70,9 @@ describe "with the lisp parser" do
       expect (lisp.parse ('"nothing\\\n to see"')).should_equal {lisp.String {[[nothing to see]]}}
     end
 
-    describe "when parsing an unterminated string" do
-      before_each do
-        err = track_error (function () lisp.parse ('"no closing quote') end)
-      end
-
-      it 'should diagnose with "incomplete string:..."' do
-        expect (err).should_match ('.*incomplete string: "no closing quote.*')
-      end
+    it "should diagnose unterminated string" do
+      err = track_error (function () lisp.parse ('"no closing quote') end)
+      expect (err).should_match ('.*incomplete string: "no closing quote.*')
     end
   end
 
@@ -122,13 +120,17 @@ describe "with the lisp parser" do
     it "should insert Nil for elided cdr" do
       expect (lisp.parse ("(42)")).should_equal {lisp.Cons {lisp.Number {42}, lisp.Nil}}
     end
+
+    it "should diagnose unterminated cons read" do
+      local err = track_error (function () lisp.parse ('(foo . bar') end)
+      expect (err).should_contain "parse error: missing ')'"
+    end
   end
 
   describe "when parsing a list" do
     it "should treat the empty list as a reference to Nil" do
       expect (lisp.parse ("()")).should_equal {lisp.Nil}
     end
-
     it "should understand arbitrarily long lists" do
       local read_syntax, list = {}, lisp.Nil
       for i = 10000, 1, -1 do
@@ -139,8 +141,13 @@ describe "with the lisp parser" do
       expect (lisp.parse (read_syntax)).should_equal {list}
     end
 
-    describe "when parsing an unterminated list" do
-      it 'should diagnose unmatched "("'
+    it "should diagnose unterminated list read" do
+      local err = track_error (function () lisp.parse ('(foo bar') end)
+      expect (err).should_contain "parse error: unexpected end-of-file"
+    end
+    it 'should diagnose unmatched "("' do
+      local err = track_error (function () lisp.parse ('foo bar)') end)
+      expect (err).should_contain "parse error: unmatched ')'"
     end
   end
 end
