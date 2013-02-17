@@ -120,12 +120,14 @@ end
 
 local set = require "set"
 
-local isskipped   = set.new { ";", " ", "\t", "\n", "\r" }
+local isspace     = set.new { " ", "\t", "\n", "\r" }
+local isskipped   = set.new { ";" } + isspace
 local isquote     = set.new { ",", ",@", "'", "`" }
 local isterminal  = set.new { "(", ".", ")" } + isquote
 local isdelimiter = set.new { '"' } + isskipped + isterminal
 
 -- For access speed, discard the wrappers and metatables.
+isspace     = isspace.contents
 isskipped   = isskipped.contents
 isquote     = isquote.contents
 isterminal  = isterminal.contents
@@ -216,8 +218,8 @@ local function parse (s)
       token = token .. c
       c = nextch ()
       if c == nil or isdelimiter[c] then
-	if not isskipped[c] then
-	  -- Don't consume non-skippable characters.
+	if not isspace[c] then
+	  -- Don't consume non-space characters.
 	  i = i - 1
 	end
 

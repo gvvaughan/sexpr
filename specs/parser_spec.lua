@@ -10,8 +10,9 @@ describe "with the lisp parser" do
       expect (lisp.parse (";;nil\nt\n;nil")).should_equal {lisp.T}
       expect (lisp.parse (";\n ;nil\r\t;nil \t;nil;; ;\nt")).should_equal {lisp.T}
     end
-    it "should not ignore non-whitespace delimiters"
-      -- expect (lisp.parse (";nil;t\nnil;t\n;;")).should_equal {lisp.Nil}
+    it "should not ignore non-whitespace delimiters" do
+      expect (lisp.parse (";nil;t\nnil;t\n;;")).should_equal {lisp.Nil}
+    end
   end
 
   describe "when parsing a Nil reference" do
