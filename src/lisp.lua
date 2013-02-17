@@ -209,6 +209,7 @@ local function parse (s)
           if c ~= '\n' then
             token = token .. c
           end
+	  c = nil -- in case it holds " which would exit the loop
         elseif c ~= '"' then
           token = token .. c
         end

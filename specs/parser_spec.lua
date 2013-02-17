@@ -57,9 +57,15 @@ describe "with the lisp parser" do
       expect (lisp.parse ('"; comment?"')).should_equal {lisp.String {"; comment?"}}
       expect (lisp.parse ('"2\n;lines"')).should_equal {lisp.String {"2\n;lines"}}
     end
-    it "should allow escaped quote marks"
-    it "should allow escaped backslashs"
-    it "should ignore escaped new-lines"
+    it "should allow escaped quote marks" do
+      expect (lisp.parse ([["escaped \" mark"]])).should_equal {lisp.String {[[escaped " mark]]}}
+    end
+    it "should allow escaped backslashs" do
+      expect (lisp.parse ([["escaped \\ char"]])).should_equal {lisp.String {[[escaped \ char]]}}
+    end
+    it "should ignore escaped new-lines" do
+      expect (lisp.parse ('"nothing\\\n to see"')).should_equal {lisp.String {[[nothing to see]]}}
+    end
 
     describe "when parsing an unterminated string" do
       before_each do
