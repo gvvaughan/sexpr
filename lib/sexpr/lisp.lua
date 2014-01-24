@@ -1,5 +1,3 @@
--- A lisp parser and evaluator.
---
 -- Copyright (c) 2013 Free Software Foundation, Inc.
 -- Written by Gary V. Vaughan, 2013
 --
@@ -18,15 +16,20 @@
 -- Free Software Foundation, Fifth Floor, 51 Franklin Street, Boston,
 -- MA 02111-1301, USA.
 
+--[[--
+ A lisp parser and evaluator.
+ @module sexpr.lisp
+]]
+
 
 local io     = require "std.io"
 local Object = require "std.object"
 
 
 
---[[ ----------- ]]--
+--[[ =========== ]]--
 --[[ Lisp Atoms. ]]--
---[[ ----------- ]]--
+--[[ =========== ]]--
 
 
 --- Pretty print an S-Expression.
@@ -72,28 +75,81 @@ end
 -- character.
 
 
+--- Root object.
+-- A `std.object` derived base type for lisp atoms.
+-- @function Atom
+-- @string kind type identifier
+-- @param ... additional fields
 local Atom     = Object { _init = { "kind" }, __tostring = stringify }
+
+
+--- Nil
+-- @function Nil
+-- @treturn Nil singleton `nil` valued atom.
 local Nil      = Atom { "nil"; value = "nil" }
+
+
+--- T
+-- @function T
+-- @treturn T singleton `t` valued atom.
 local T        = Atom { "t";   value = "t"   }
 
+
+--- Cons cell.
+-- @function Cons
+-- @param[opt] car address register contents
+-- @param[opt] cdr decrement register contents
+-- @treturn Cons a new cons atom, with `car` and `cdr` set.
 local Cons     = Atom { "cons";     _init = { "car", "cdr" } }
+
+
+--- Function atom.
+-- @function Function
+-- @string name name of the function
+-- @func func handler function
+-- @string[opt=nil] special "lazy" for special forms that evaluate their
+--   own parameters, or "macro" for forms that output an sexpr for
+--   further evaluation
+-- @treturn Function a new function atom
 local Function = Atom { "function"; _init = { "value", "func", "special" } }
+
+
+--- Number atom.
+-- @function Number
+-- @number value a number
+-- @treturn Number a new number atom
 local Number   = Atom { "number";   _init = { "value" } }
+
+
+--- String atom.
+-- @function String
+-- @string value a string
+-- @treturn String a new string atom
 local String   = Atom { "string";   _init = { "value" } }
+
+
+--- Symbol atom.
+-- The parser produces these when it encounters symbol read syntax in
+-- the input stream.
+-- @function Symbol
+-- @string value symbol name
+-- @treturn Symbol a new symbol atom.
 local Symbol   = Atom { "symbol";   _init = { "value" } }
 
 
 
---[[ ---------- ]]--
+--[[ ========== ]]--
 --[[ Utilities. ]]--
---[[ ---------- ]]--
+--[[ ========== ]]--
 
 
-local append
-
--- Return a single list containing the elements of all the arguments.
+--- Recursively append elements to an existing list.
 -- The last argument is not copied, just used as the tail of the new list.
-function append (first, rest)
+-- @tparam Atom first head of a new cons list
+-- @tparam Atom rest list of addional elements to append
+-- @treturn Cons a single cons list of `first` followed by elements of
+--   `rest`
+local function append (first, rest)
   if rest.cdr ~= Nil and rest.cdr.car.kind == "cons" then
     -- Concatenate REST to a single list.
     rest = Cons {append (rest.car, rest.cdr), Nil}
@@ -108,9 +164,10 @@ end
 
 
 
---[[ ------------------- ]]--
+--[[ =================== ]]--
 --[[ Scanner and parser. ]]--
---[[ ------------------- ]]--
+--[[ =================== ]]--
+
 
 -- The parser is a closure over the lex function, and several
 -- helpers, which allows them all to reference the shared state
@@ -140,8 +197,9 @@ local function iton (s, i)
 end
 
 
--- Parse S, a string of lisp code, returning a list of (unevaluated)
--- s-expressions.
+--- Lisp parser.
+-- @string s a string of lisp code.
+-- @treturn Cons a list of (unevaluated) s-expressions.
 local function parse (s)
   local i, n = 0, #s
 
@@ -305,15 +363,19 @@ end
 
 
 
---[[ ------------- ]]--
+--[[ ============= ]]--
 --[[ Environments. ]]--
---[[ ------------- ]]--
+--[[ ============= ]]--
 
 -- Environments are nested symbol tables used to provide scopes
 -- in which symbol values are stored and looked up.
 
 
--- Recursively bind arguments to parameters within ENV.
+--- Recursively bind arguments to parameters.
+-- @tparam table env an environment table
+-- @tparam Cons paramlist a list of parameters
+-- @tparam Cons arglist a list of arguments
+-- @treturn table modified `env`
 local function env_bind (env, paramlist, arglist)
   if paramlist.kind ~= "cons" then
     return env
@@ -323,13 +385,20 @@ local function env_bind (env, paramlist, arglist)
 end
 
 
--- Return a new local environment pushed on top of ENV.
+--- Make a new local environment.
+-- @tparam table env an existing environment table
+-- @treturn table a new local environment "inside" `env`
 local function env_push (env)
   return setmetatable ({}, { __index = env })
 end
 
 
--- Evaluate SEXPR by substituting symbols looked up in ENV.
+--- Partial evaluation.
+-- Recursively substitute Symbol elements in `sexpr` for the values
+-- bound to them in `env`
+-- @tparam table env an environment table
+-- @tparam Cons sexpr an S-Expression
+-- @treturn Cons `sexpr` with Symbol elements applied
 local function env_apply (env, sexpr)
   if sexpr.kind == "cons" then
     return Cons {env_apply (env, sexpr.car), env_apply (env, sexpr.cdr)}
@@ -341,9 +410,9 @@ end
 
 
 
---[[ --------------- ]]--
+--[[ =============== ]]--
 --[[ Lisp Evaluator. ]]--
---[[ --------------- ]]--
+--[[ =============== ]]--
 
 -- The main function here is evalsexpr () which substitutes symbol
 -- names for values and/or calls functions according to the active
@@ -354,7 +423,10 @@ end
 local evalquote, evalargs, evalsexpr
 
 
--- Evaluate only escaped sub-expressions of quoted SEXPR inside ENV.
+--- Evaluate only escaped sub-expressions of quoted `sexpr`.
+-- @tparam table env an environment table
+-- @tparam Atom sexpr the balance of a "`" quoted S-Expression
+-- @treturn Atom `sexpr` with commas and splices evaluated
 function evalquote (env, sexpr)
   if sexpr.kind == "cons" then
     local car = sexpr.car
@@ -375,7 +447,10 @@ function evalquote (env, sexpr)
 end
 
 
--- Evaluate each item in argument LIST inside ENV.
+--- Evaluate a list of sexprs.
+-- @tparam table env an environment table
+-- @tparam Cons list an argument list
+-- @treturn Cons evaluated `list`
 function evalargs (env, list)
   if list.kind ~= "cons" then
     return list
@@ -384,7 +459,10 @@ function evalargs (env, list)
 end
 
 
--- Evaluate SEXPR inside ENV.
+--- Evaluate a single sexpr.
+-- @tparam table env an environment table
+-- @tparam Atom sexpr an S-Expression
+-- @return evaluation result
 function evalsexpr (env, sexpr)
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
@@ -430,7 +508,10 @@ function evalsexpr (env, sexpr)
 end
 
 
--- Evaluate a string of lisp.
+--- Evaluate a string of lisp.
+-- @tparam table env an environment table
+-- @string s a string of lisp code
+-- @return evaluation result of last S-Expression in `s`
 local function evalstring (env, s)
   local t, errmsg = parse (s)
   if t == nil then
@@ -445,7 +526,10 @@ local function evalstring (env, s)
 end
 
 
--- Evaluate a file of lisp.
+--- Evaluate a file of lisp.
+-- @tparam table env an environment table
+-- @string filename name of a file
+-- @return evaluation result of last S-Expression in `filename`
 local function evalfile (env, filename)
   local s, errmsg = io.slurp (filename)
 
@@ -458,13 +542,14 @@ end
 
 
 
---[[ ----------------- ]]--
+--[[ ================= ]]--
 --[[ Public Interface. ]]--
---[[ ----------------- ]]--
+--[[ ================= ]]--
 
 -- Return a table of the public interface to this file.
 
-local public = {
+--- @export
+return {
   -- Lisp Atoms:
   Cons     = Cons,
   Function = Function,
@@ -490,5 +575,3 @@ local public = {
   evalsexpr  = evalsexpr,
   evalstring = evalstring,
 }
-
-return public

@@ -1,5 +1,3 @@
--- Primitive lisp commands.
---
 -- Copyright (c) 2013 Free Software Foundation, Inc.
 -- Written by Gary V. Vaughan, 2013
 --
@@ -18,6 +16,10 @@
 -- Free Software Foundation, Fifth Floor, 51 Franklin Street, Boston,
 -- MA 02111-1301, USA.
 
+--[[--
+ Primitive lisp commands.
+ @module sexpr.primitive
+]]
 
 local lisp = require "sexpr.lisp"
 
@@ -30,12 +32,18 @@ local Nil, T, Cons, Function, Number, append =
 local symbols = {}
 
 
--- Primitive (NAME, [FLAGS], FUNC)
-local function Primitive (name, flags, func)
+--- Define a new primitive function.
+-- @string name symbol name
+-- @string[opt=nil] special "lazy" for special forms that evaluate their
+--   own parameters, or "macro" for forms that output an sexpr for
+--   further evaluation
+-- @func func handler function
+-- @treturn Symbol interned function symbol
+local function Primitive (name, special, func)
   if func == nil then
-    flags, func = func, flags
+    special, func = func, special
   end
-  symbols[name] = Function {name, func, flags}
+  symbols[name] = Function {name, func, special}
 end
 
 
