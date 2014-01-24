@@ -1,0 +1,113 @@
+before:
+  require "spec_helper"
+
+specify parser:
+- context when scanning its input:
+  - it should return an empty table for no input:
+      expect (parse "").should_equal {}
+  - it should skip white space:
+      expect (parse " \t\n\rt \t\n\r").should_equal {T}
+  - it should ignore comments:
+      expect (parse "t;;nil;;t").should_equal {T}
+      expect (parse ";;nil\nt\n;nil").should_equal {T}
+      expect (parse ";\n ;nil\r\t;nil \t;nil;; ;\nt").should_equal {T}
+  - it should not ignore non-whitespace delimiters:
+      expect (parse ";nil;t\nnil;t\n;;").should_equal {Nil}
+
+- context when parsing a Nil reference:
+  - it should recognize read-syntax of "nil":
+      expect (parse "nil").should_equal {Nil}
+
+- context when reading a T reference:
+  - it should recognize read-syntax of "t":
+      expect (parse "t").should_equal {T}
+
+- context when parsing a number:
+  - before:
+      value = 42
+      read_syntax = tostring (value)
+
+  - it should construct a number atom:
+      expect (parse (read_syntax)).should_equal {Number {value}}
+  - it should understand read syntax for a number:
+      expect (parse "42;").should_equal {Number {42}}
+      expect (parse "4 2").should_equal {Number {4}, Number {2}}
+      expect (parse "42x").should_not_equal {Number {42}}
+
+- context when parsing a string:
+  - before:
+      value = "Hello, World!"
+      read_syntax = string.format ('"%s"', value)
+
+  - it should construct a string atom:
+      expect (parse (read_syntax)).should_equal {String {value}}
+  - it should understand read-syntax for a string:
+      expect (parse '"two\nlines"').should_equal {String {"two\nlines"}}
+      expect (parse '"; comment?"').should_equal {String {"; comment?"}}
+      expect (parse '"2\n;lines"').should_equal {String {"2\n;lines"}}
+  - it should allow escaped quote marks:
+      expect (parse [["escaped \" mark"]]).should_equal {String {[[escaped " mark]]}}
+  - it should allow escaped backslashs:
+      expect (parse [["escaped \\ char"]]).should_equal {String {[[escaped \ char]]}}
+  - it should ignore escaped new-lines:
+      expect (parse '"nothing\\\n to see"').should_equal {String {[[nothing to see]]}}
+  - it should diagnose unterminated string: |
+      expect (parse '"no closing quote').
+        should_error 'incomplete string: "no closing quote'
+
+- context when parsing a symbol:
+  - before:
+      value = "hello-world!"
+      read_syntax = string.format ("%s", value)
+
+      -- make a silly symbol name from all non-terminal characters
+      not_symbol_chars = "; \t\n\r,'`(.)" .. '"'
+      silly_name = ""
+      for i = 32, 126 do
+        local c = string.char (i)
+        if not not_symbol_chars:find (c, 1, true) then
+          silly_name = silly_name .. c
+        end
+      end
+
+  - it should construct a symbol atom:
+      expect (parse (read_syntax)).should_equal {Symbol {read_syntax}}
+  - it should understand read-syntax for a symbol:
+      expect (parse "42x").should_equal {Symbol {"42x"}}
+      expect (parse "symname ; comment").should_equal {Symbol {"symname"}}
+  - it should produce a symbol when a token is nothing else:
+      expect (parse (silly_name)).should_equal {Symbol {silly_name}}
+
+- context when parsing a cons cell:
+  - before:
+      car = Number {4}
+      cdr = Number {2}
+      read_syntax = string.format ("(%s . %s)", car, cdr)
+
+  - it should construct a cons atom:
+      expect (parse (read_syntax)).should_equal {Cons {car, cdr}}
+  - it should understand read-syntax for a cons cell:
+      expect (parse '("Hello". "World!")').should_equal {Cons {String {"Hello"}, String {"World!"}}}
+  - it should insert Nil for elided cdr:
+      expect (parse "(42)").should_equal {Cons {Number {42}, Nil}}
+  - it should diagnose unterminated cons read: |
+      expect (parse '(foo . bar').
+        should_error "parse error: missing ')'"
+
+- context when parsing a list:
+  - it should treat the empty list as a reference to Nil:
+      expect (parse ("()")).should_equal {Nil}
+  - it should understand arbitrarily long lists:
+      local read_syntax, list = {}, Nil
+      for i = 10000, 1, -1 do
+        read_syntax[i] = tostring (i)
+        list = Cons {Number {i}, list}
+      end
+      read_syntax = "(" .. table.concat (read_syntax, " ") .. ")"
+      expect (parse (read_syntax)).should_equal {list}
+  - it should diagnose unterminated list read: |
+      expect (parse '(foo bar').
+        should_error "parse error: unexpected end-of-file"
+  - it should diagnose unmatched "(": |
+      expect (parse 'foo bar)').
+        should_error "parse error: unmatched ')'"

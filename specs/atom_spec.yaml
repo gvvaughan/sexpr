@@ -1,0 +1,112 @@
+before:
+  require "spec_helper"
+
+specify Atom prototype:
+- context when constructing a Nil atom:
+  - it should be of type "nil":
+      expect (Nil.kind).should_be "nil"
+  - it should stringify to "nil":
+      expect (tostring (Nil)).should_be "nil"
+
+- context when constructing a T atom:
+  - it should be of type "t":
+      expect (T.kind).should_be "t"
+  - it should be non-nil valued:
+      expect (T).should_not_be (Nil)
+  - it should stringify to "t":
+      expect (tostring (T)).should_be "t"
+
+- context when constructing a Number atom:
+  - before:
+      value = 42
+      atom = Number {value}
+      display_syntax = string.format ("%d", value)
+
+  - it should be of type "number":
+      expect (atom.kind).should_be "number"
+  - it should stringify to its value:
+      expect (tostring (atom)).should_be (display_syntax)
+
+- context when constructing a String atom:
+  - before:
+      value = "Hello, World!"
+      atom = String {value}
+      display_syntax = string.format ('"%s"', value)
+
+  - it should be of type "string":
+      expect (atom.kind).should_be "string"
+  - it should stringify to its value enclosed by quotes:
+      expect (tostring (atom)).should_be (display_syntax)
+  - it should escape quote marks within the contained value:
+      expect (tostring (String {'escaped "'})).should_be ([["escaped \""]])
+  - it should escape backslashes within the contained value:
+      expect (tostring (String {[[escaped \]]})).should_be ([["escaped \\"]])
+
+- context when constructing a Symbol atom:
+  - before:
+      value = "hello-world!"
+      atom = Symbol {value}
+      display_syntax = string.format ("%s", value)
+
+  - it should be of type "symbol":
+      expect (atom.kind).should_be "symbol"
+  - it should stringify to its value:
+      expect (tostring (atom)).should_be (display_syntax)
+
+- context when constructing a cons cell:
+  - before:
+      car = Number {4}
+      cdr = Number {2}
+      atom = Cons {car, cdr}
+      display_syntax = string.format ("(%s . %s)", tostring (car), tostring (cdr))
+
+  - it should be of type "cons":
+      expect (atom.kind).should_be "cons"
+  - it should stringify as a dotted pair:
+      expect (tostring (atom)).should_be (display_syntax)
+  - it should not display nil valued cdr:
+      local atom = Cons {car, Nil}
+      local display_syntax = string.format ("(%s)", tostring (car))
+      expect (tostring (atom)).should_be (display_syntax)
+  - it should display cons lists without dot separators:
+      local cons = Cons {car, Nil}
+      cons = Cons {Nil, Cons {cdr, cons}}
+      expect (tostring (cons)).should_be "(nil 2 4)"
+  - it should allow arbitrarily long lists:
+      local list, display_syntax = Nil, {} 
+      for i = 10000, 1, -1 do
+        list = Cons {Number {i}, list}
+        display_syntax [i] = tostring (i)
+      end
+      display_syntax = "(" .. table.concat (display_syntax, " ") .. ")"
+      expect (tostring (list)).should_be (display_syntax)
+
+- context when constructing a function atom:
+  - before:
+      func = function () return "it works!" end
+      fname = "callme"
+      atom = Function {fname, func, "flags"}
+      display_syntax = string.format ("#'%s", fname)
+
+  - it should be of type "function":
+      expect (atom.kind).should_be "function"
+  - it should stringify to its display syntax:
+      expect (tostring (atom)).should_be (display_syntax)
+  - it should contain a function reference from its constructor:
+      expect (atom.func ()).should_be "it works!"
+  - it should contain the flags from its constructor:
+      expect (atom.special).should_be "flags"
+
+- context when constructing a function macro:
+  - before:
+      func = function () return "still working" end
+      fname = "callme"
+      atom = Function {fname, func, "macro"}
+      display_syntax = string.format ("#macro'%s", fname)
+
+  - it should be of type "function":
+      expect (atom.kind).should_be ("function")
+  - it should stringify to its display syntax:
+      expect (tostring (atom)).should_be (display_syntax)
+  - it should contain a function reference from its constructor:
+      expect (atom.func ()).should_be "still working"
