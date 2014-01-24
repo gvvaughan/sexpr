@@ -28,6 +28,42 @@ local Object = require "std.object"
 --[[ Lisp Atoms. ]]--
 --[[ ----------- ]]--
 
+
+--- Pretty print an S-Expression.
+-- @function __tostring
+-- @tparam Atom sexpr an S-Expression
+-- @param[opt] nested non-nil when outer parens have been emitted
+-- @treturn string pretty string representation of `sexpr`
+local function stringify (sexpr, nested)
+  local s = ""
+  if sexpr.kind == "cons" then
+    return (nested and " " or "(") ..
+            tostring (sexpr.car) ..
+	    stringify (sexpr.cdr, "nested") ..
+	    (nested and "" or ")")
+  end
+
+  if nested and sexpr.kind ~= "nil" then
+    s = s .. " . "
+  end
+
+  if sexpr.kind == "function" then
+    s = s .. (sexpr.special == "macro" and "#macro'" or "#'")
+  end
+
+  -- Ignore the nil at the end of a cons list.
+  if not (nested and sexpr.kind == "nil") then
+    if sexpr.kind == "string" then
+      -- Quote and escape a string properly.
+      s = s .. string.format ('"%s"', sexpr.value:gsub ('["\\]', "\\%0"))
+    else
+      s = s .. sexpr.value
+    end
+  end
+  return s
+end
+
+
 -- The parser returns a Lua list of s-expressions built from
 -- the following atoms.  Nil and T are singletons so that
 -- equality checks do the right thing, and some syntactical
@@ -36,42 +72,7 @@ local Object = require "std.object"
 -- character.
 
 
-
-local Atom
-
-Atom = Object {
-  _init = { "kind" },
-
-  __tostring = function (sexpr, nested)
-    local s = ""
-    if sexpr.kind == "cons" then
-      return (nested and " " or "(") ..
-             tostring (sexpr.car) ..
-             Atom.__tostring (sexpr.cdr, true) ..
-             (nested and "" or ")")
-    end
-
-    if nested and sexpr.kind ~= "nil" then
-      s = s .. " . "
-    end
-
-    if sexpr.kind == "function" then
-      s = s .. (sexpr.special == "macro" and "#macro'" or "#'")
-    end
-
-    -- Ignore the nil at the end of a cons list.
-    if not (nested and sexpr.kind == "nil") then
-      if sexpr.kind == "string" then
-        -- Quote and escape a string properly.
-        s = s .. string.format ('"%s"', sexpr.value:gsub ('["\\]', "\\%0"))
-      else
-        s = s .. sexpr.value
-      end
-    end
-    return s
-  end,
-}
-
+local Atom     = Object { _init = { "kind" }, __tostring = stringify }
 local Nil      = Atom { "nil"; value = "nil" }
 local T        = Atom { "t";   value = "t"   }
 
