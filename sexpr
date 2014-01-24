@@ -29,6 +29,10 @@ local primitive = require "sexpr.primitive"
 local lisp = require "sexpr.lisp"
 
 
+print "sexpr v0  Copyright (C) 2013 Gary V. Vaughan"
+print "enter ':q' to exit"
+
+
 local function REPL ()
   local env = primitive.symbols
 
