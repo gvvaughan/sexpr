@@ -19,7 +19,7 @@
 -- MA 02111-1301, USA.
 
 
-local lisp = require "lisp"
+local lisp = require "sexpr.lisp"
 
 local Nil, T, Cons, Function, Number, append =
       lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number, lisp.append

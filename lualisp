@@ -21,18 +21,18 @@
 -- MA 02111-1301, USA.
 
 
-require "strict" -- from lua-stdlib
+require "std.strict"
 
-package.path = "src/?.lua;" .. package.path
+package.path = "lib/?.lua;" .. package.path
 
-local primitive = require "primitive"
-local lisp = require "lisp"
+local primitive = require "sexpr.primitive"
+local lisp = require "sexpr.lisp"
 
 
 local function REPL ()
   local env = primitive.symbols
 
-  lisp.evalfile (env, "init.lsp")
+  lisp.evalfile (env, "lib/sexpr/init.lsp")
 
   local line
   repeat

@@ -19,7 +19,8 @@
 -- MA 02111-1301, USA.
 
 
-require "io_ext"
+local io     = require "std.io"
+local Object = require "std.object"
 
 
 
@@ -35,7 +36,6 @@ require "io_ext"
 -- character.
 
 
-local Object = require "object"
 
 local Atom
 
@@ -122,20 +122,13 @@ end
 -- as it decides what Atoms to produce for the parser.
 
 
-local set = require "set"
+local set = require "std.set"
 
 local isspace     = set.new { " ", "\t", "\n", "\r" }
 local isskipped   = set.new { ";" } + isspace
 local isquote     = set.new { ",", ",@", "'", "`" }
 local isterminal  = set.new { "(", ".", ")" } + isquote
 local isdelimiter = set.new { '"' } + isskipped + isterminal
-
--- For access speed, discard the wrappers and metatables.
-isspace     = isspace.contents
-isskipped   = isskipped.contents
-isquote     = isquote.contents
-isterminal  = isterminal.contents
-isdelimiter = isdelimiter.contents
 
 
 -- Return the line-number at which index I occurs in S.
