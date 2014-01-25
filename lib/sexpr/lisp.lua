@@ -478,8 +478,15 @@ function evalsexpr (env, sexpr)
       return evalquote (env, sexpr.cdr)
 
     else
-      -- Otherwise the first symbol of a CONS list should be a function.
-      local func = evalsexpr (env, car)
+      -- Otherwise the first symbol of a CONS list..
+      local func
+      if car.kind == "symbol" then
+	-- ...can be a function symbol
+        func = env[car.value]
+      else
+	-- ...or a function valued expression
+        func = evalsexpr (env, car)
+      end
       if func == nil or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
       end
@@ -501,7 +508,7 @@ function evalsexpr (env, sexpr)
     if value ~= nil then
       return value
     end
-    error ("undefined symbol '" .. sexpr.value .. "'", 0)
+    error ("symbol's value as a variable is void: " .. sexpr.value, 0)
   end
 
   return sexpr

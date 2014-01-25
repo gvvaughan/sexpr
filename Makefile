@@ -70,6 +70,7 @@ $(dist_doc_DATA) $(dist_classes_DATA) $(dist_modules_DATA): $(ldoc_DEPS)
 specl_SPECS =						\
 	$(srcdir)/specs/atom_spec.yaml			\
 	$(srcdir)/specs/parser_spec.yaml		\
+	$(srcdir)/specs/lisp_spec.yaml			\
 	$(NOTHING_ELSE)
 
 

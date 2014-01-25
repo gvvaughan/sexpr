@@ -1,0 +1,159 @@
+before:
+  require "spec_helper"
+
+specify lisp:
+- it returns the result of the last expression:
+    expect (eval "42").should_equal (Number {42})
+    expect (eval "1 42").should_equal (Number {42})
+    expect (eval "nil t 42").should_equal (Number {42})
+
+- context when evaluating nil:
+  - it returns the nil atom:
+      expect (eval "nil").should_be (Nil)
+  - it is the same when quoted:
+      expect (eval "'nil").should_be (Nil)
+
+- context when evaluating t:
+  - it returns the t atom:
+      expect (eval "t").should_be (T)
+  - it is the same when quoted:
+      expect (eval "'t").should_be (T)
+
+- context when evaluating a number:
+  - it returns the number:
+      expect (eval "42").should_equal (Number {42})
+  - it is the same when quoted:
+      expect (eval "'42").should_equal (Number {42})
+
+- context when evaluating a string:
+  - it returns the string:
+      expect (eval '"Hello, World!"').
+        should_equal (String {"Hello, World!"})
+  - it is the same when quoted:
+      expect (eval [['"Hello, World!"]]).
+        should_equal (String {"Hello, World!"})
+
+- describe evaluating a symbol:
+  - it diagnoses unbound symbols: |
+      expect (eval "not-bound").
+        should_error "symbol's value as a variable is void: not-bound"
+
+  - it unquotes a quoted symbol:
+      expect (eval [['not-bound]]).should_equal (Symbol {"not-bound"})
+
+  - context with a value:
+    - it returns a nil value:
+        val = Nil
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a t value:
+        val = T
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a number value:
+        val = Number {42}
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a string value:
+        val = String {"Hello, World!"}
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a symbol value:
+        val = Symbol {"car"}
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a function value:
+        val = Function {"func", function () return Nil end}
+        expect (seteval ("bound", val, "bound")).should_be (val)
+    - it returns a cons value:
+        val = Cons {Number {1}, Nil}
+        expect (seteval ("bound", val, "bound")).should_be (val)
+
+- describe evaluating a list:
+  - before:
+      # stringified result of calling `sexprs` after (setq call-me!
+      # `handler`) in evaluation environment.
+      strevalenv = function (handler, sexprs, env)
+        return tostring (seteval ("call-me!", handlers[handler], sexprs, env))
+      end
+
+  - it diagnoses unbound symbols: |
+      expect (eval "(not-a-function)").
+        should_error "symbol's function definition is void: not-a-function"
+
+  - context when quoted:
+    - it prevents evaluation:
+        expect (streval "'(1 2 3)").should_be "(1 2 3)"
+
+  - context when backquoted:
+    - before:
+        globals = env_push (global_env)
+        globals["some-list"] = eval "'(2 3)"
+    - it prevents evaluation:
+        expect (streval "`(1 2 3)").should_be "(1 2 3)"
+    - it evaluates unquoted segments:
+        globals["+"] = primitive.symbols["+"]
+        expect (streval ("`(a list of ,(+ 3 2) elements)", globals)).
+          should_be "(a list of 5 elements)"
+    - it evaluates unquoted nested segments:
+        globals["+"] = primitive.symbols["+"]
+        expect (streval ("`(1 2 (3 ,(+ 4 5)))", globals)).
+          should_be "(1 2 (3 9))"
+    - it splices evaluated values into a list:
+        expect (streval ("`(1 ,@some-list 4 ,@some-list)", globals)).
+          should_be "(1 2 3 4 2 3)"
+    - it splices evaluated calls into a list:
+        globals.cdr = primitive.symbols.cdr
+        expect (streval ("`(1 (2 (,@(cdr some-list) 4) 5))", globals)).
+          should_be "(1 (2 (3 4) 5))"
+
+  - context with a function value:
+    - it calls the function:
+        expect (strevalenv ("called", "(call-me!)")).should_be '"called!"'
+    - it passes arguments as a cons list:
+        expect (strevalenv ("cons", '(call-me! "first" 2)')).
+          should_be '("called!" "first" 2)'
+
+  - context with a lambda value:
+    - before:
+        globals = env_push (global_env)
+        globals.lambda = primitive.symbols.lambda
+
+    - it calls the lambda expression:
+        expect (eval ('((lambda () "called!"))', globals)).
+          should_equal (String {"called!"})
+    - it evaluates the lambda body:
+        expect (strevalenv ("called", "((lambda () (call-me!)))", globals)).
+          should_be '"called!"'
+    - it binds arguments to lambda parameters:
+        lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
+        expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
+    - it shadows global variables with lambda bindings:
+        globals.x, globals.y = String {"oh noes!"}, Number {1}
+        lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
+        expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
+    - it can access global variables:
+        globals.x, globals.y = String {"woo!"}, Number {1}
+        lambda = "((lambda (y z) (call-me! x y z)) 2 1)"
+        expect (strevalenv ("reverse", lambda, globals)).
+          should_be '(1 2 "woo!")'
+
+  - context with a macro value:
+    - before:
+        globals = env_push (global_env)
+        globals.defmacro = primitive.symbols.defmacro
+        eval ("(defmacro boom (x) '(1 x 3))", globals)
+
+    - it returns a macro:
+        expect (streval ("(defmacro kapow () '(1 2 3))", globals)).
+          should_be "#macro'(defmacro kapow nil (' 1 2 3))"
+    - it expands a macro before evaluation:
+        streval ("(defmacro kapow () '(1 2 3))", globals)
+        expect (streval ("(kapow)", globals)).
+          should_be "(1 2 3)"
+    - it binds arguments to macro parameters:
+        expect (streval ("(boom 2)", globals)).should_be "(1 2 3)"
+    - it binds symbols to macro parameters:
+        expect (streval ("(boom sock)", globals)).should_be "(1 sock 3)"
+    - it evalutes the expansion of a macro:
+        globals["if"] = primitive.symbols["if"]
+        eval ("(defmacro and (a b) (if a b nil))", globals)
+        expect (streval ('(and t "zowie")', globals)).should_be '"zowie"'
+        expect (streval ('(and "zowie" t)', globals)).should_be "t"
+        expect (streval ('(and nil "zowie")', globals)).should_be "nil"
+        expect (streval ('(and "zowie" nil)', globals)).should_be "nil"
