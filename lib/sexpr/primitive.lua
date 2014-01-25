@@ -165,7 +165,7 @@ Primitive ("consp",
 Primitive ("defmacro",
   "lazy",
   function (env, sexpr)
-    local name   = sexpr.car
+    local name   = sexpr.car.name
     local params = sexpr.cdr.car
     local body   = sexpr.cdr.cdr.car
     local value  = string.format ("(defmacro %s %s %s)", name, params, body)
@@ -175,7 +175,7 @@ Primitive ("defmacro",
                      return lisp.evalsexpr (env2, applied)
                    end
     local func   = Function { value, macro, "macro" }
-    env[name.value] = func
+    env[name]    = func
     return func
   end
 )
@@ -187,9 +187,10 @@ Primitive ("eq",
   function (env, args)
     local arg1 = args.car
     local arg2 = args.cdr.car
-    return (arg1.kind == arg2.kind
-            and arg1.kind ~= "cons"
-            and arg1.value == arg2.value) and T or Nil
+    if arg1.kind == "cons" or arg1.kind ~= arg2.kind then return Nil end
+    if arg1.value ~= nil and arg1.value == arg2.value then return T end
+    assert (arg1.kind == arg2.kind and arg1.name ~= nil)
+    return arg1.name == arg2.name and T or Nil
   end
 )
 
@@ -200,7 +201,7 @@ Primitive ("eval",
   function (env, sexpr)
     local car = sexpr.car
     if car.kind == "string" then
-      return lisp.evalExpr (env, sexpr.car.value)
+      return lisp.evalstring (env, sexpr.car.value)
     end
     return lisp.evalsexpr (env, car)
   end
@@ -302,7 +303,7 @@ Primitive ("setq",
     local value
     repeat
       value = lisp.evalsexpr(env, args.cdr.car)
-      env[args.car.value] = value
+      env[args.car.name] = value
       args = args.cdr.cdr
     until args == nil or args.car == nil
     return value

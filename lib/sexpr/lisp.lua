@@ -60,7 +60,7 @@ local function stringify (sexpr, nested)
       -- Quote and escape a string properly.
       s = s .. string.format ('"%s"', sexpr.value:gsub ('["\\]', "\\%0"))
     else
-      s = s .. sexpr.value
+      s = s .. (sexpr.name or sexpr.value)
     end
   end
   return s
@@ -111,7 +111,7 @@ local Cons     = Atom { "cons";     _init = { "car", "cdr" } }
 --   own parameters, or "macro" for forms that output an sexpr for
 --   further evaluation
 -- @treturn Function a new function atom
-local Function = Atom { "function"; _init = { "value", "func", "special" } }
+local Function = Atom { "function"; _init = { "name", "func", "special" } }
 
 
 --- Number atom.
@@ -132,9 +132,9 @@ local String   = Atom { "string";   _init = { "value" } }
 -- The parser produces these when it encounters symbol read syntax in
 -- the input stream.
 -- @function Symbol
--- @string value symbol name
+-- @string name symbol name
 -- @treturn Symbol a new symbol atom.
-local Symbol   = Atom { "symbol";   _init = { "value" } }
+local Symbol   = Atom { "symbol";   _init = { "name" } }
 
 
 
@@ -380,7 +380,7 @@ local function env_bind (env, paramlist, arglist)
   if paramlist.kind ~= "cons" then
     return env
   end
-  env[paramlist.car.value] = arglist.car
+  env[paramlist.car.name] = arglist.car
   return env_bind (env, paramlist.cdr, arglist.cdr)
 end
 
@@ -403,7 +403,7 @@ local function env_apply (env, sexpr)
   if sexpr.kind == "cons" then
     return Cons {env_apply (env, sexpr.car), env_apply (env, sexpr.cdr)}
   elseif sexpr.kind == "symbol" then
-    return env[sexpr.value] or sexpr
+    return env[sexpr.name] or sexpr
   end
   return sexpr
 end
@@ -482,7 +482,7 @@ function evalsexpr (env, sexpr)
       local func
       if car.kind == "symbol" then
 	-- ...can be a function symbol
-        func = env[car.value]
+        func = env[car.name]
       else
 	-- ...or a function valued expression
         func = evalsexpr (env, car)
@@ -504,11 +504,11 @@ function evalsexpr (env, sexpr)
     end
 
   elseif sexpr.kind == "symbol" then
-    local value = env[sexpr.value]
+    local value = env[sexpr.name]
     if value ~= nil then
       return value
     end
-    error ("symbol's value as a variable is void: " .. sexpr.value, 0)
+    error ("symbol's value as a variable is void: " .. sexpr.name, 0)
   end
 
   return sexpr
