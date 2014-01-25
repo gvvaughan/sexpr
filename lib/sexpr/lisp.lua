@@ -138,6 +138,63 @@ local Symbol   = Atom { "symbol";   _init = { "name" } }
 
 
 
+--[[ ======== ]]--
+--[[ Obarray. ]]--
+--[[ ======== ]]--
+
+
+--- Global symbol table.
+-- A mapping of symbol-names to symbol-values.  _Interned_ symbols are
+-- stored here.
+--
+-- There is no way to access the contents of the global symol table,
+-- except to use the mapatoms function.
+-- @table obarray
+local obarray = {}
+
+
+--- Intern a symbol.
+-- @string name symbol name
+-- @tparam[opt=obarray] table env an environment table
+-- @treturn Symbol interned symbol.
+local function intern (name, env)
+  env = env or obarray
+  if not env[name] then
+    env[name] = Symbol {name}
+  end
+  return env[name]
+end
+
+
+--- Check whether `name` was previously interted.
+-- @string name possibly interned name
+-- @tparam[opt=obarray] table env an environment table
+-- @return symbol previously interned wih `name`, or `nil`
+local function intern_soft (name, env)
+  return (env or obarray)[name]
+end
+
+
+------
+-- Function signature for `mapatoms` callback function.
+-- @function map_cb
+-- @tparam Symbol symbol a symbol
+-- @return if `true` then mapatoms returns immediately.
+
+
+--- Call a function on every symbol in `obarray`.
+-- If `func` returns `true`, mapatoms returns immediately.
+-- @tparam map_cb func a function
+-- @tparam[opt=obarray] table env an environment table
+-- @return `true` if `func` signalled early exit, otherwise `nil`
+local function mapatoms (func, env)
+  for _, symbol in pairs (env or obarray) do
+    if func (symbol) == true then return true end
+  end
+end
+
+
+
 --[[ ========== ]]--
 --[[ Utilities. ]]--
 --[[ ========== ]]--
@@ -380,7 +437,8 @@ local function env_bind (env, paramlist, arglist)
   if paramlist.kind ~= "cons" then
     return env
   end
-  env[paramlist.car.name] = arglist.car
+  local param = intern (paramlist.car.name, env)
+  param.value = arglist.car
   return env_bind (env, paramlist.cdr, arglist.cdr)
 end
 
@@ -403,7 +461,7 @@ local function env_apply (env, sexpr)
   if sexpr.kind == "cons" then
     return Cons {env_apply (env, sexpr.car), env_apply (env, sexpr.cdr)}
   elseif sexpr.kind == "symbol" then
-    return env[sexpr.name] or sexpr
+    return (intern_soft (sexpr.name, env) or {}).value or sexpr
   end
   return sexpr
 end
@@ -482,10 +540,10 @@ function evalsexpr (env, sexpr)
       local func
       if car.kind == "symbol" then
 	-- ...can be a function symbol
-        func = env[car.name]
+	func = (intern_soft (car.name, env) or {}).value
       else
 	-- ...or a function valued expression
-        func = evalsexpr (env, car)
+	func = evalsexpr (env, car)
       end
       if func == nil or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
@@ -504,7 +562,7 @@ function evalsexpr (env, sexpr)
     end
 
   elseif sexpr.kind == "symbol" then
-    local value = env[sexpr.name]
+    local value = (intern_soft (sexpr.name, env) or {}).value
     if value ~= nil then
       return value
     end
@@ -565,6 +623,12 @@ return {
   String   = String,
   Symbol   = Symbol,
   T        = T,
+
+  -- Obarray:
+  intern      = intern,
+  intern_soft = intern_soft,
+  mapatoms    = mapatoms,
+  obarray     = obarray,  --FIXME
 
   -- Utilities:
   append   = append,

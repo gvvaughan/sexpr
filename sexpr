@@ -34,7 +34,7 @@ print "enter ':q' to exit"
 
 
 local function REPL ()
-  local env = primitive.symbols
+  local env = lisp.obarray
 
   lisp.evalfile (env, "lib/sexpr/init.lsp")
 

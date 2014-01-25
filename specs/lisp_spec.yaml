@@ -83,7 +83,7 @@ specify lisp:
   - context when backquoted:
     - before:
         globals = env_push (global_env)
-        globals["some-list"] = eval "'(2 3)"
+        setq (globals, "some-list", eval "'(2 3)")
     - it prevents evaluation:
         expect (streval "`(1 2 3)").should_be "(1 2 3)"
     - it evaluates unquoted segments:
@@ -124,11 +124,13 @@ specify lisp:
         lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
     - it shadows global variables with lambda bindings:
-        globals.x, globals.y = String {"oh noes!"}, Number {1}
+        setq (globals, "x", String {"oh noes!"})
+        setq (globals, "y", Number {1})
         lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
     - it can access global variables:
-        globals.x, globals.y = String {"woo!"}, Number {1}
+        setq (globals, "x", String {"woo!"})
+        setq (globals, "y", Number {1})
         lambda = "((lambda (y z) (call-me! x y z)) 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).
           should_be '(1 2 "woo!")'

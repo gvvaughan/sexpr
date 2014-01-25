@@ -23,14 +23,10 @@
 
 local lisp = require "sexpr.lisp"
 
-local Nil, T, Cons, Function, Number, append =
-      lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number, lisp.append
-
-
--- Helper functions
-
-local symbols = {}
-
+local Nil, T, Cons, Function, Number =
+      lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number
+local append, intern, intern_soft =
+      lisp.append, lisp.intern, lisp.intern_sof
 
 --- Define a new primitive function.
 -- @string name symbol name
@@ -43,7 +39,8 @@ local function Primitive (name, special, func)
   if func == nil then
     special, func = func, special
   end
-  symbols[name] = Function {name, func, special}
+  local symbol = intern (name)
+  symbol.value = Function {name, func, special}
 end
 
 
@@ -56,7 +53,7 @@ end
 -- (* &rest NUMBERS)
 -- Return product of any number of arguments, which are numbers.
 Primitive ("*",
-  function (env, args)
+  function (_, args)
     local product = 1
     while args and args.car do
       product = product * tonumber (args.car.value)
@@ -70,7 +67,7 @@ Primitive ("*",
 -- (+ &rest NUMBERS)
 -- Return sum of any number of arguments, which are numbers.
 Primitive ("+",
-  function (env, args)
+  function (_, args)
     local sum = 0
     while args and args.car do
       sum   = sum + tonumber (args.car.value)
@@ -86,7 +83,7 @@ Primitive ("+",
 -- With one argument, negates it.  With more than one argument,
 -- subtracts all but the first from the first.
 Primitive ("-",
-  function (env, args)
+  function (_, args)
     if args.car == nil then
       return Number {0}
     elseif args.cdr.car == nil then
@@ -107,7 +104,7 @@ Primitive ("-",
 -- Return t if first argument is less than second argument. Both must be
 -- numbers.
 Primitive ("<",
-  function (env, args)
+  function (_, args)
     return tonumber (args.car) < tonumber (args.cdr.car) and T or Nil
   end
 )
@@ -118,7 +115,7 @@ Primitive ("<",
 -- Return a list whose elements are the elements of all the arguments.
 -- The last argument is not copied, just used as the tail of the new list.
 Primitive ("append",
-  function (env, args)
+  function (_, args)
     if args == Nil then
       return Nil
     elseif args.cdr == Nil then
@@ -133,28 +130,28 @@ Primitive ("append",
 -- (car LIST)
 -- Return the car of LIST.  If LIST is nil, return nil.
 Primitive ("car",
-  function (env, args) return args.car.car end
+  function (_, args) return args.car.car end
 )
 
 
 -- (cdr LISP)
 -- Return the cdr of LIST,  If LIST is nil, return nil.
 Primitive ("cdr",
-  function (env, args) return args.car.cdr end
+  function (_, args) return args.car.cdr end
 )
 
 
 -- (cons CAR CDR)
 -- Create a new cons, give it CAR and CDR as components, and return it.
 Primitive ("cons",
-  function (env, args) return Cons {args.car, args.cdr.car} end
+  function (_, args) return Cons {args.car, args.cdr.car} end
 )
 
 
 -- (consp OBJECT)
 -- Return t if OBJECT is a cons cell.
 Primitive ("consp",
-  function (env, args)
+  function (_, args)
     return args.car.kind == "cons" and T or Nil
   end
 )
@@ -165,18 +162,22 @@ Primitive ("consp",
 Primitive ("defmacro",
   "lazy",
   function (env, sexpr)
-    local name   = sexpr.car.name
-    local params = sexpr.cdr.car
-    local body   = sexpr.cdr.cdr.car
-    local value  = string.format ("(defmacro %s %s %s)", name, params, body)
-    local macro  = function (env2, args)
-                     local scope   = lisp.env_bind ({}, params, args)
-                     local applied = lisp.env_apply (scope, body)
-                     return lisp.evalsexpr (env2, applied)
-                   end
-    local func   = Function { value, macro, "macro" }
-    env[name]    = func
-    return func
+    local name      = sexpr.car.name
+    local paramlist = sexpr.cdr.car
+    local body      = sexpr.cdr.cdr.car
+
+    local symbol    = intern (name, env)
+    symbol.value    = Function {
+      string.format ("(defmacro %s %s %s)", name, paramlist, body),
+      function (env2, args)
+        local scope   = lisp.env_bind ({}, paramlist, args)
+        local applied = lisp.env_apply (scope, body)
+        return lisp.evalsexpr (env2, applied)
+      end,
+      "macro"
+    }
+
+    return symbol.value
   end
 )
 
@@ -184,7 +185,7 @@ Primitive ("defmacro",
 -- (eq OBJ1 OBJ2)
 -- Return t if the OBJ1 and OBJ2 are the same Lisp object.
 Primitive ("eq",
-  function (env, args)
+  function (_, args)
     local arg1 = args.car
     local arg2 = args.cdr.car
     if arg1.kind == "cons" or arg1.kind ~= arg2.kind then return Nil end
@@ -267,7 +268,7 @@ Primitive ("load",
 -- (prin1 OBJECT)
 -- Output the printed repreresentation of OBJECT, any Lisp object.
 Primitive ("prin1",
-  function (env, sexpr)
+  function (_, sexpr)
     print (tostring (sexpr.car))
     return T
   end
@@ -289,7 +290,7 @@ Primitive ("progn",
 
 
 -- (setq [SYMBOL VALUE]...)
--- Set each SYMBOL to the following nVALUE.
+-- Set each SYMBOL to the following VALUE.
 -- Each SYMBOL is a variable; they are literal (not evaluated).
 -- Each VALUE is an expression; they are evaluated.
 -- Thus, (setq x (1+ y)) sets `x' to the value of `(1+ y)'.
@@ -300,19 +301,16 @@ Primitive ("progn",
 Primitive ("setq",
   "lazy",
   function (env, args)
-    local value
+    local symbol
     repeat
-      value = lisp.evalsexpr(env, args.cdr.car)
-      env[args.car.name] = value
+      symbol = intern (args.car.name)
+      symbol.value = lisp.evalsexpr(env, args.cdr.car)
       args = args.cdr.cdr
     until args == nil or args.car == nil
-    return value
+    return symbol.value
   end
 )
 
-
-local M = {
-  symbols = symbols,
+return {
+  Primitive = Primitive,
 }
-
-return M
