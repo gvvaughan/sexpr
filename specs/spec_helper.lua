@@ -5,7 +5,7 @@ Cons, Function, Nil, Number, String, Symbol, T =
   lisp.Cons, lisp.Function, lisp.Nil, lisp.Number, lisp.String, lisp.Symbol, lisp.T
 append, evalstring, parse = lisp.append, lisp.evalstring, lisp.parse
 intern, intern_soft = lisp.intern, lisp.intern_soft
-env_push = lisp.env_push
+pushenv = lisp.pushenv
 
 
 global_env = {}
@@ -19,34 +19,34 @@ function import (env, name)
 end
 
 function eval (s, env)
-  return evalstring (env or global_env, s)
+  return evalstring (s, env or global_env)
 end
 
 function streval (s, env)
   return tostring (eval (s, env))
 end
 
-function setq (env, name, value)
+function setq (name, value, env)
   local symbol = intern (name, env)
   symbol.value = value
 end
 
 function seteval (var, val, s, env)
-  local env = env_push (env or global_env)
-  setq (env, var, val)
-  return evalstring (env, s), env
+  local env = pushenv (env or global_env)
+  setq (var, val, env)
+  return evalstring (s, env), env
 end
 
 handlers = {
-  called  = Function {"call-me!", function (...)
+  called  = Function {"call-me!", function ()
 	      return String {"called!"}
             end},
 
-  cons    = Function {"cons", function (_, args)
+  cons    = Function {"cons", function (args)
               return Cons {String {"called!"}, args}
             end},
 
-  reverse = Function {"reverse", function (_, args)
+  reverse = Function {"reverse", function (args)
               local reverse = Nil
               while args and args.car do
                 reverse, args = Cons {args.car, reverse}, args.cdr

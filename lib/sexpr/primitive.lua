@@ -53,7 +53,7 @@ end
 -- (* &rest NUMBERS)
 -- Return product of any number of arguments, which are numbers.
 Primitive ("*",
-  function (_, args)
+  function (args)
     local product = 1
     while args and args.car do
       product = product * tonumber (args.car.value)
@@ -67,7 +67,7 @@ Primitive ("*",
 -- (+ &rest NUMBERS)
 -- Return sum of any number of arguments, which are numbers.
 Primitive ("+",
-  function (_, args)
+  function (args)
     local sum = 0
     while args and args.car do
       sum   = sum + tonumber (args.car.value)
@@ -83,7 +83,7 @@ Primitive ("+",
 -- With one argument, negates it.  With more than one argument,
 -- subtracts all but the first from the first.
 Primitive ("-",
-  function (_, args)
+  function (args)
     if args.car == nil then
       return Number {0}
     elseif args.cdr.car == nil then
@@ -104,7 +104,7 @@ Primitive ("-",
 -- Return t if first argument is less than second argument. Both must be
 -- numbers.
 Primitive ("<",
-  function (_, args)
+  function (args)
     return tonumber (args.car) < tonumber (args.cdr.car) and T or Nil
   end
 )
@@ -115,7 +115,7 @@ Primitive ("<",
 -- Return a list whose elements are the elements of all the arguments.
 -- The last argument is not copied, just used as the tail of the new list.
 Primitive ("append",
-  function (_, args)
+  function (args)
     if args == Nil then
       return Nil
     elseif args.cdr == Nil then
@@ -130,28 +130,28 @@ Primitive ("append",
 -- (car LIST)
 -- Return the car of LIST.  If LIST is nil, return nil.
 Primitive ("car",
-  function (_, args) return args.car.car end
+  function (args) return args.car.car end
 )
 
 
 -- (cdr LISP)
 -- Return the cdr of LIST,  If LIST is nil, return nil.
 Primitive ("cdr",
-  function (_, args) return args.car.cdr end
+  function (args) return args.car.cdr end
 )
 
 
 -- (cons CAR CDR)
 -- Create a new cons, give it CAR and CDR as components, and return it.
 Primitive ("cons",
-  function (_, args) return Cons {args.car, args.cdr.car} end
+  function (args) return Cons {args.car, args.cdr.car} end
 )
 
 
 -- (consp OBJECT)
 -- Return t if OBJECT is a cons cell.
 Primitive ("consp",
-  function (_, args)
+  function (args)
     return args.car.kind == "cons" and T or Nil
   end
 )
@@ -161,7 +161,7 @@ Primitive ("consp",
 -- Define NAME as a macro.
 Primitive ("defmacro",
   "lazy",
-  function (env, sexpr)
+  function (sexpr, env)
     local name      = sexpr.car.name
     local paramlist = sexpr.cdr.car
     local body      = sexpr.cdr.cdr.car
@@ -169,10 +169,10 @@ Primitive ("defmacro",
     local symbol    = intern (name, env)
     symbol.value    = Function {
       string.format ("(defmacro %s %s %s)", name, paramlist, body),
-      function (env2, args)
-        local scope   = lisp.env_bind ({}, paramlist, args)
-        local applied = lisp.env_apply (scope, body)
-        return lisp.evalsexpr (env2, applied)
+      function (args, env2)
+        local scope   = lisp.bind (paramlist, args, {})
+        local applied = lisp.apply (body, scope)
+        return lisp.evalsexpr (applied, env2)
       end,
       "macro"
     }
@@ -185,7 +185,7 @@ Primitive ("defmacro",
 -- (eq OBJ1 OBJ2)
 -- Return t if the OBJ1 and OBJ2 are the same Lisp object.
 Primitive ("eq",
-  function (_, args)
+  function (args)
     local arg1 = args.car
     local arg2 = args.cdr.car
     if arg1.kind == "cons" or arg1.kind ~= arg2.kind then return Nil end
@@ -199,12 +199,12 @@ Primitive ("eq",
 -- (eval FORM)
 -- Evaluate FORM and return its value.
 Primitive ("eval",
-  function (env, sexpr)
+  function (sexpr, env)
     local car = sexpr.car
     if car.kind == "string" then
-      return lisp.evalstring (env, sexpr.car.value)
+      return lisp.evalstring (sexpr.car.value, env)
     end
-    return lisp.evalsexpr (env, car)
+    return lisp.evalsexpr (car, env)
   end
 )
 
@@ -216,16 +216,16 @@ Primitive ("eval",
 -- If COND yields nil, and there are no ELSE's, the value is nil.
 Primitive ("if",
   "lazy",
-  function (env, forms)
-    local cond = lisp.evalsexpr (env, forms.car)
+  function (forms, env)
+    local cond = lisp.evalsexpr (forms.car, env)
     if cond.kind ~= "nil" then
-      return lisp.evalsexpr (env, forms.cdr.car)
+      return lisp.evalsexpr (forms.cdr.car, env)
     end
 
     local result = Nil
     forms = forms.cdr.cdr
     while forms and forms.car do
-      result = lisp.evalsexpr (env, forms.car)
+      result = lisp.evalsexpr (forms.car, env)
       forms = forms.cdr
     end
     return result
@@ -241,15 +241,15 @@ Primitive ("if",
 -- value of a symbol, passed to `funcall' or `mapcar', etc.
 Primitive ("lambda",
   "lazy",
-  function (env, args)
+  function (args, env)
     local paramlist = args.car
     local body      = args.cdr.car
     return Function {
       string.format ("(lambda %s %s)", paramlist, body),
-      function (_, arglist)
-        local scope = lisp.env_push (env)
-        lisp.env_bind (scope, paramlist, arglist)
-        return lisp.evalsexpr (scope, body)
+      function (arglist)
+        local scope = lisp.pushenv (env)
+        lisp.bind (paramlist, arglist, scope)
+        return lisp.evalsexpr (body, scope)
       end
     }
   end
@@ -258,8 +258,8 @@ Primitive ("lambda",
 -- (load FILE)
 -- Execute a file of Lisp code named FILE.
 Primitive ("load",
-  function (env, sexpr)
-    lisp.evalfile (env, sexpr.car.value)
+  function (sexpr, env)
+    lisp.evalfile (sexpr.car.value, env)
     return T
   end
 )
@@ -278,10 +278,10 @@ Primitive ("prin1",
 -- (progn BODY...)
 -- Evaluate BODY forms sequentially and return value the last one.
 Primitive ("progn",
-  function (env, forms)
+  function (forms, env)
     local result = Nil
     while forms and forms.car do
-      result = lisp.evalsexpr (env, forms.car)
+      result = lisp.evalsexpr (forms.car, env)
       forms = list.cdr
     end
     return result
@@ -300,11 +300,11 @@ Primitive ("progn",
 -- The return value of the `setq' form is the value of the last VALUE.
 Primitive ("setq",
   "lazy",
-  function (env, args)
+  function (args, env)
     local symbol
     repeat
       symbol = intern (args.car.name)
-      symbol.value = lisp.evalsexpr(env, args.cdr.car)
+      symbol.value = lisp.evalsexpr(args.cdr.car, env)
       args = args.cdr.cdr
     until args == nil or args.car == nil
     return symbol.value

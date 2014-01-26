@@ -82,8 +82,8 @@ specify lisp:
 
   - context when backquoted:
     - before:
-        globals = env_push (global_env)
-        setq (globals, "some-list", eval "'(2 3)")
+        globals = pushenv (global_env)
+        setq ("some-list", eval "'(2 3)", globals)
     - it prevents evaluation:
         expect (streval "`(1 2 3)").should_be "(1 2 3)"
     - it evaluates unquoted segments:
@@ -103,15 +103,19 @@ specify lisp:
           should_be "(1 (2 (3 4) 5))"
 
   - context with a function value:
+    - before:
+        globals = pushenv (global_env)
+
     - it calls the function:
-        expect (strevalenv ("called", "(call-me!)")).should_be '"called!"'
+        expect (strevalenv ("called", "(call-me!)", globals)).
+          should_be '"called!"'
     - it passes arguments as a cons list:
-        expect (strevalenv ("cons", '(call-me! "first" 2)')).
+        expect (strevalenv ("cons", '(call-me! "first" 2)', globals)).
           should_be '("called!" "first" 2)'
 
   - context with a lambda value:
     - before:
-        globals = env_push (global_env)
+        globals = pushenv (global_env)
         import (globals, "lambda")
 
     - it calls the lambda expression:
@@ -124,20 +128,20 @@ specify lisp:
         lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
     - it shadows global variables with lambda bindings:
-        setq (globals, "x", String {"oh noes!"})
-        setq (globals, "y", Number {1})
+        setq ("x", String {"oh noes!"}, globals)
+        setq ("y", Number {1}, globals)
         lambda = "((lambda (x y z) (call-me! x y z)) 3 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).should_be "(1 2 3)"
     - it can access global variables:
-        setq (globals, "x", String {"woo!"})
-        setq (globals, "y", Number {1})
+        setq ("x", String {"woo!"}, globals)
+        setq ("y", Number {1}, globals)
         lambda = "((lambda (y z) (call-me! x y z)) 2 1)"
         expect (strevalenv ("reverse", lambda, globals)).
           should_be '(1 2 "woo!")'
 
   - context with a macro value:
     - before:
-        globals = env_push (global_env)
+        globals = pushenv (global_env)
         import (globals, "defmacro")
         eval ("(defmacro boom (x) '(1 x 3))", globals)
 

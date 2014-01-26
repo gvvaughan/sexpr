@@ -427,39 +427,42 @@ end
 -- Environments are nested symbol tables used to provide scopes
 -- in which symbol values are stored and looked up.
 
+local apply, bind, pushenv
 
 --- Recursively bind arguments to parameters.
--- @tparam table env an environment table
 -- @tparam Cons paramlist a list of parameters
 -- @tparam Cons arglist a list of arguments
+-- @tparam[opt=obarray] table env an environment table
 -- @treturn table modified `env`
-local function env_bind (env, paramlist, arglist)
+function bind (paramlist, arglist, env)
+  env = env or obarray
   if paramlist.kind ~= "cons" then
     return env
   end
   local param = intern (paramlist.car.name, env)
   param.value = arglist.car
-  return env_bind (env, paramlist.cdr, arglist.cdr)
+  return bind (paramlist.cdr, arglist.cdr, env)
 end
 
 
 --- Make a new local environment.
--- @tparam table env an existing environment table
+-- @tparam[opt=obarray] table env an existing environment table
+-- @tparam[opt={}] table init initialised environment table to push
 -- @treturn table a new local environment "inside" `env`
-local function env_push (env)
-  return setmetatable ({}, { __index = env })
+function pushenv (env, init)
+  return setmetatable (init or {}, { __index = env or obarray })
 end
 
 
 --- Partial evaluation.
 -- Recursively substitute Symbol elements in `sexpr` for the values
 -- bound to them in `env`
--- @tparam table env an environment table
 -- @tparam Cons sexpr an S-Expression
+-- @tparam[opt=obarray] table env an environment table
 -- @treturn Cons `sexpr` with Symbol elements applied
-local function env_apply (env, sexpr)
+function apply (sexpr, env)
   if sexpr.kind == "cons" then
-    return Cons {env_apply (env, sexpr.car), env_apply (env, sexpr.cdr)}
+    return Cons {apply (sexpr.car, env), apply (sexpr.cdr, env)}
   elseif sexpr.kind == "symbol" then
     return (intern_soft (sexpr.name, env) or {}).value or sexpr
   end
@@ -482,23 +485,23 @@ local evalquote, evalargs, evalsexpr
 
 
 --- Evaluate only escaped sub-expressions of quoted `sexpr`.
--- @tparam table env an environment table
 -- @tparam Atom sexpr the balance of a "`" quoted S-Expression
+-- @tparam[opt=obarray] table env an environment table
 -- @treturn Atom `sexpr` with commas and splices evaluated
-function evalquote (env, sexpr)
+function evalquote (sexpr, env)
   if sexpr.kind == "cons" then
     local car = sexpr.car
     if car.kind == "," then
       -- Unquote s-expression following "," operator.
-      return evalsexpr (env, sexpr.cdr)
+      return evalsexpr (sexpr.cdr, env)
 
     elseif car.kind == "cons" and car.car.kind == ",@" then
       -- Splice s-expression following ",@" operator.
-      local rest = Cons {evalquote (env, sexpr.cdr), Nil}
-      return append (evalsexpr (env, car.cdr), rest)
+      local rest = Cons {evalquote (sexpr.cdr, env), Nil}
+      return append (evalsexpr (car.cdr, env), rest)
 
     else
-      return Cons {evalquote (env, car), evalquote (env, sexpr.cdr)}
+      return Cons {evalquote (car, env), evalquote (sexpr.cdr, env)}
     end
   end
   return sexpr
@@ -506,22 +509,22 @@ end
 
 
 --- Evaluate a list of sexprs.
--- @tparam table env an environment table
 -- @tparam Cons list an argument list
+-- @tparam[opt=obarray] table env an environment table
 -- @treturn Cons evaluated `list`
-function evalargs (env, list)
+function evalargs (list, env)
   if list.kind ~= "cons" then
     return list
   end
-  return Cons {evalsexpr (env, list.car), evalargs (env, list.cdr)}
+  return Cons {evalsexpr (list.car, env), evalargs (list.cdr, env)}
 end
 
 
 --- Evaluate a single sexpr.
--- @tparam table env an environment table
 -- @tparam Atom sexpr an S-Expression
+-- @tparam[opt=obarray] table env an environment table
 -- @return evaluation result
-function evalsexpr (env, sexpr)
+function evalsexpr (sexpr, env)
   if not sexpr.kind then
     error ("invalid s-expr: " .. tostring (sexpr), 0)
   end
@@ -533,7 +536,7 @@ function evalsexpr (env, sexpr)
 
     elseif car.kind == "`" then
       -- Comma expressions inside a back-quoted expression ARE evaluated.
-      return evalquote (env, sexpr.cdr)
+      return evalquote (sexpr.cdr, env)
 
     else
       -- Otherwise the first symbol of a CONS list..
@@ -543,7 +546,7 @@ function evalsexpr (env, sexpr)
 	func = (intern_soft (car.name, env) or {}).value
       else
 	-- ...or a function valued expression
-	func = evalsexpr (env, car)
+	func = evalsexpr (car, env)
       end
       if func == nil or func.kind ~= "function" then
         error ("symbol's function definition is void: " .. tostring (car), 0)
@@ -556,9 +559,9 @@ function evalsexpr (env, sexpr)
       if func.special == "lazy" or func.special == "macro"  then
         args = sexpr.cdr
       else
-        args = evalargs (env, sexpr.cdr)
+        args = evalargs (sexpr.cdr, env)
       end
-      return func.func (env, args)
+      return func.func (args, env)
     end
 
   elseif sexpr.kind == "symbol" then
@@ -574,10 +577,10 @@ end
 
 
 --- Evaluate a string of lisp.
--- @tparam table env an environment table
 -- @string s a string of lisp code
+-- @tparam[opt=obarray] table env an environment table
 -- @return evaluation result of last S-Expression in `s`
-local function evalstring (env, s)
+local function evalstring (s, env)
   local t, errmsg = parse (s)
   if t == nil then
     return nil, errmsg
@@ -585,21 +588,21 @@ local function evalstring (env, s)
 
   local result
   for _, sexpr in ipairs (t) do
-    result = evalsexpr (env, sexpr)
+    result = evalsexpr (sexpr, env)
   end
   return result
 end
 
 
 --- Evaluate a file of lisp.
--- @tparam table env an environment table
 -- @string filename name of a file
+-- @tparam[opt=obarray] table env an environment table
 -- @return evaluation result of last S-Expression in `filename`
-local function evalfile (env, filename)
+local function evalfile (filename, env)
   local s, errmsg = io.slurp (filename)
 
   if s then
-    s, errmsg = evalstring (env, s)
+    s, errmsg = evalstring (s, env)
   end
 
   return s, errmsg
@@ -636,9 +639,9 @@ return {
   parse = parse,
 
   -- Environments:
-  env_apply = env_apply,
-  env_bind  = env_bind,
-  env_push  = env_push,
+  apply   = apply,
+  bind    = bind,
+  pushenv = pushenv,
 
   -- Evaluator:
   evalfile   = evalfile,

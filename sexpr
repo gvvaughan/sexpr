@@ -34,16 +34,14 @@ print "enter ':q' to exit"
 
 
 local function REPL ()
-  local env = lisp.obarray
-
-  lisp.evalfile (env, "lib/sexpr/init.lsp")
+  lisp.evalfile "lib/sexpr/init.lsp"
 
   local line
   repeat
     io.write ("> ")
     line = io.read ()
     if line and line ~= ":q" then
-      local ok, value = pcall (lisp.evalstring, env, line)
+      local ok, value = pcall (lisp.evalstring, line)
       if ok then
         if value then
           print (tostring (value))
