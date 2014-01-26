@@ -6,7 +6,7 @@ env:
     - PACKAGE=sexpr
     - ROCKSPEC=$PACKAGE-git-1.rockspec
     - LUAROCKS_CONFIG=build-aux/luarocks-config.lua
-    - LUAROCKS_BASE=luarocks-2.1.2
+    - LUAROCKS_BASE=luarocks-2.1.1
     - LUAROCKS="$LUA $HOME/bin/luarocks"
   matrix:
     - LUA=lua5.1             LUA_INCDIR=/usr/include/lua5.1     LUA_SUFFIX=5.1
@@ -47,7 +47,7 @@ script:
   - export PATH=`pwd`/luarocks/bin:$PATH
 
   # Install extra rocks into $LUAROCKS_CONFIG rocks tree.
-  - $LUAROCKS install ldoc; $LUAROCKS install specl;
+  - $LUAROCKS install ldoc; $LUAROCKS install specl; $LUAROCKS install stdlib
 
   # Run self-tests in the `luarocks make` build tree.
   - LUA_PATH=`pwd`'/lib/?.lua;'"${LUA_PATH-;}"

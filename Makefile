@@ -27,7 +27,7 @@ check_local =
 ## Environment. ##
 ## ------------ ##
 
-LUA_PATH  = ;
+LUA_PATH  ?= ;
 
 std_path = $(abs_srcdir)/lib/?.lua
 SPECL_ENV  = LUA_PATH="$(std_path);$(LUA_PATH)"
@@ -103,15 +103,15 @@ check: $(check_local)
 
 luarocks_config   = build-aux/luarocks-config.lua
 
-set_LUA_BINDIR = LUA_BINDIR=`which $(LUA) |$(SED) 's|/[^/]*$$||'`
+set_LUA_BINDIR = LUA_BINDIR=`which $(LUA) |sed 's|/[^/]*$$||'`
 LUA_INCDIR = `cd $$LUA_BINDIR/../include && pwd`
 LUA_LIBDIR = `cd $$LUA_BINDIR/../lib && pwd`
 
-$(luarocks_config): Makefile.am
+$(luarocks_config):
 	@test -d build-aux || mkdir build-aux
 	$(AM_V_GEN){						\
 	  $(set_LUA_BINDIR);					\
-	  echo 'rocks_trees = { "$(abs_srcdir)/luarocks" }';	\
+	  echo 'rocks_trees = { "'$(abs_srcdir)'/luarocks" }';	\
 	  echo 'variables = {';					\
 	  echo '  LUA = "$(LUA)",';				\
 	  echo '  LUA_BINDIR = "'$$LUA_BINDIR'",';		\
