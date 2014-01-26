@@ -4,13 +4,19 @@ primitive = require "sexpr.primitive"
 Cons, Function, Nil, Number, String, Symbol, T =
   lisp.Cons, lisp.Function, lisp.Nil, lisp.Number, lisp.String, lisp.Symbol, lisp.T
 append, evalstring, parse = lisp.append, lisp.evalstring, lisp.parse
-intern = lisp.intern
+intern, intern_soft = lisp.intern, lisp.intern_soft
 env_push = lisp.env_push
 
 
-primitive.symbols = lisp.obarray -- FIXME
-
 global_env = {}
+
+function import (env, name)
+  local export = intern_soft (name) -- from obarray
+  if export ~= nil then
+    local global = intern (name, env or global_env) -- to env
+    global.value = export.value
+  end
+end
 
 function eval (s, env)
   return evalstring (env or global_env, s)

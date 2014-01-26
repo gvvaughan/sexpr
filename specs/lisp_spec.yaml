@@ -87,18 +87,18 @@ specify lisp:
     - it prevents evaluation:
         expect (streval "`(1 2 3)").should_be "(1 2 3)"
     - it evaluates unquoted segments:
-        globals["+"] = primitive.symbols["+"]
+        import (globals, "+")
         expect (streval ("`(a list of ,(+ 3 2) elements)", globals)).
           should_be "(a list of 5 elements)"
     - it evaluates unquoted nested segments:
-        globals["+"] = primitive.symbols["+"]
+        import (globals, "+")
         expect (streval ("`(1 2 (3 ,(+ 4 5)))", globals)).
           should_be "(1 2 (3 9))"
     - it splices evaluated values into a list:
         expect (streval ("`(1 ,@some-list 4 ,@some-list)", globals)).
           should_be "(1 2 3 4 2 3)"
     - it splices evaluated calls into a list:
-        globals.cdr = primitive.symbols.cdr
+        import (globals, "cdr")
         expect (streval ("`(1 (2 (,@(cdr some-list) 4) 5))", globals)).
           should_be "(1 (2 (3 4) 5))"
 
@@ -112,7 +112,7 @@ specify lisp:
   - context with a lambda value:
     - before:
         globals = env_push (global_env)
-        globals.lambda = primitive.symbols.lambda
+        import (globals, "lambda")
 
     - it calls the lambda expression:
         expect (eval ('((lambda () "called!"))', globals)).
@@ -138,7 +138,7 @@ specify lisp:
   - context with a macro value:
     - before:
         globals = env_push (global_env)
-        globals.defmacro = primitive.symbols.defmacro
+        import (globals, "defmacro")
         eval ("(defmacro boom (x) '(1 x 3))", globals)
 
     - it returns a macro valued symbol:
@@ -155,7 +155,7 @@ specify lisp:
     - it binds symbols to macro parameters:
         expect (streval ("(boom sock)", globals)).should_be "(1 sock 3)"
     - it evalutes the expansion of a macro:
-        globals["if"] = primitive.symbols["if"]
+        import (globals, "if")
         eval ("(defmacro and (a b) (if a b nil))", globals)
         expect (streval ('(and t "zowie")', globals)).should_be '"zowie"'
         expect (streval ('(and "zowie" t)', globals)).should_be "t"

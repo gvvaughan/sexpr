@@ -628,7 +628,6 @@ return {
   intern      = intern,
   intern_soft = intern_soft,
   mapatoms    = mapatoms,
-  obarray     = obarray,  --FIXME
 
   -- Utilities:
   append   = append,
