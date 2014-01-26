@@ -141,8 +141,10 @@ specify lisp:
         globals.defmacro = primitive.symbols.defmacro
         eval ("(defmacro boom (x) '(1 x 3))", globals)
 
-    - it returns a macro:
+    - it returns a macro valued symbol:
         expect (streval ("(defmacro kapow () '(1 2 3))", globals)).
+          should_be "kapow"
+        expect (tostring (eval ("kapow", globals))).
           should_be "#macro'(defmacro kapow nil (' 1 2 3))"
     - it expands a macro before evaluation:
         streval ("(defmacro kapow () '(1 2 3))", globals)

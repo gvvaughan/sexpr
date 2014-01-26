@@ -177,7 +177,7 @@ Primitive ("defmacro",
       "macro"
     }
 
-    return symbol.value
+    return symbol
   end
 )
 
