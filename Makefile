@@ -95,3 +95,27 @@ specl-check-local: $(specl_SPECS)
 
 
 check: $(check_local)
+
+
+## --------- ##
+## LuaRocks. ##
+## --------- ##
+
+luarocks_config   = build-aux/luarocks-config.lua
+
+set_LUA_BINDIR = LUA_BINDIR=`which $(LUA) |$(SED) 's|/[^/]*$$||'`
+LUA_INCDIR = `cd $$LUA_BINDIR/../include && pwd`
+LUA_LIBDIR = `cd $$LUA_BINDIR/../lib && pwd`
+
+$(luarocks_config): Makefile.am
+	@test -d build-aux || mkdir build-aux
+	$(AM_V_GEN){						\
+	  $(set_LUA_BINDIR);					\
+	  echo 'rocks_trees = { "$(abs_srcdir)/luarocks" }';	\
+	  echo 'variables = {';					\
+	  echo '  LUA = "$(LUA)",';				\
+	  echo '  LUA_BINDIR = "'$$LUA_BINDIR'",';		\
+	  echo '  LUA_INCDIR = "'$(LUA_INCDIR)'",';		\
+	  echo '  LUA_LIBDIR = "'$(LUA_LIBDIR)'",';		\
+	  echo '}';						\
+	} > '$@'
