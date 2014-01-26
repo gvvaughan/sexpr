@@ -78,7 +78,7 @@ specl_SPECS =						\
 ## Specl. ##
 ## ------ ##
 
-SPECL = specl
+SPECL = build-aux/specl
 
 # Use 'make check V=1' for verbose output, or set SPECL_OPTS to
 # pass alternative options to specl command.

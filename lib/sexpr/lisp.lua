@@ -83,6 +83,22 @@ end
 local Atom     = Object { _init = { "kind" }, __tostring = stringify }
 
 
+--- Alternative Root object.
+-- Like Atom, with the addition of metamethods for fast comparison
+-- without recursively comparing all fields and values.
+-- @function ComparableAtom
+-- @string kind type identifier
+-- @param ... additional fields
+local ComparableAtom = Object {
+  _init = { "kind" },
+  __tostring = stringify,
+
+  __eq = function (a, b) return a.value == b.value end,
+  __le = function (a, b) return a.value <= b.value end,
+  __lt = function (a, b) return a.value < b.value end,
+}
+
+
 --- Nil
 -- @function Nil
 -- @treturn Nil singleton `nil` valued atom.
@@ -118,14 +134,14 @@ local Function = Atom { "function"; _init = { "name", "func", "special" } }
 -- @function Number
 -- @number value a number
 -- @treturn Number a new number atom
-local Number   = Atom { "number";   _init = { "value" } }
+local Number = ComparableAtom { "number"; _init = { "value" } }
 
 
 --- String atom.
 -- @function String
 -- @string value a string
 -- @treturn String a new string atom
-local String   = Atom { "string";   _init = { "value" } }
+local String   = ComparableAtom { "string";   _init = { "value" } }
 
 
 --- Symbol atom.

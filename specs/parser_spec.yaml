@@ -99,7 +99,7 @@ specify parser:
 
 - context when parsing a list:
   - it treats the empty list as a reference to Nil:
-      expect (parse ("()")).should_equal {Nil}
+      expect (parse "()").should_equal {Nil}
   - it understands arbitrarily long lists:
       local read_syntax, list = {}, Nil
       for i = 10000, 1, -1 do
