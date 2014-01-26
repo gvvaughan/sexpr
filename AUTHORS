@@ -1,0 +1,14 @@
+The authors of Sexpr:
+
+* Scott Lawrence <yorgle@gmail.com> wrote the "lithp" interpreter
+  which was used as the basis for the tiny Lisp interpreter in C Zile.
+
+* Reuben Thomas <rrt@sc3d.org> translated the code from C that
+  formed the Lisp interpreter for Lua Zile.
+
+* David Bergman <davber@gmail.com> wrote lualisp, which influenced the
+  design of lambda and defmacro in Sexpr.
+
+* Gary V. Vaughan <gary@gnu.org> wrote Sexpr from scratch, designed
+  to be a drop in replacement for the toy Lisp implementation in Lua
+  Zile, but to be a fully functional Lisp.
