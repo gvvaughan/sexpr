@@ -85,7 +85,7 @@ specify parser:
   - before:
       car = Number {4}
       cdr = Number {2}
-      read_syntax = string.format ("(%s . %s)", car, cdr)
+      read_syntax = string.format ("(%s . %s)", tostring (car), tostring (cdr))
 
   - it constructs a cons atom:
       expect (parse (read_syntax)).should_equal {Cons {car, cdr}}

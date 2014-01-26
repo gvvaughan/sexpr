@@ -168,7 +168,8 @@ Primitive ("defmacro",
 
     local symbol    = intern (name, env)
     symbol.value    = Function {
-      string.format ("(defmacro %s %s %s)", name, paramlist, body),
+      string.format ("(defmacro %s %s %s)",
+                     name, tostring (paramlist), tostring (body)),
       function (args, env2)
         local scope   = lisp.bind (paramlist, args, {})
         local applied = lisp.apply (body, scope)
@@ -245,7 +246,8 @@ Primitive ("lambda",
     local paramlist = args.car
     local body      = args.cdr.car
     return Function {
-      string.format ("(lambda %s %s)", paramlist, body),
+      string.format ("(lambda %s %s)",
+                     tostring (paramlist), tostring (body)),
       function (arglist)
         local scope = lisp.pushenv (env)
         lisp.bind (paramlist, arglist, scope)
