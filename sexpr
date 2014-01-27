@@ -29,10 +29,49 @@ local primitive = require "sexpr.primitive"
 local lisp = require "sexpr.lisp"
 
 
-print [[
-sexpr version 0  Copyright (C) 2014 Gary V. Vaughan"
-enter ":q" to exit; "(describe 'symbol)" for SYMBOL docs]]
 
+--[[ =========================== ]]--
+--[[ Parse command line options. ]]--
+--[[ =========================== ]]--
+
+
+local OptionParser = require "std.optparse"
+local parser = OptionParser [[
+sexpr version 0
+Written by Gary V. Vaughan <gary@gnu.org>, 2013
+
+Copyright (C) 2014, Gary V. Vaughan
+Sexpr comes with ABSOLUTELY NO WARRANTY.
+You may redistribute copies of Sexpr under the terms of the GNU
+General Public License; either version 3, or any later version.
+For more information, see <http://gnu.org/licenses>.
+
+Usage: sexpr [OPTION]... [FILE}...
+
+A Lisp interpreter in Lua.
+
+If no FILE is listed, go into the interactive REPL.
+
+      --help            print this help, then exit
+      --version         print version number, then exit
+
+Report bugs to http://github.com/gvvaughan/sexpr/issues.]]
+
+_G.arg, opts = parser:parse (_G.arg)
+
+
+-- Treat remaining arguments as filenames to be evaluated by Sexpr.
+for i = 1, #arg do
+  local ok, errmsg = lisp.evalfile (arg[i])
+  if not ok then
+    errmsg = errmsg or "unknown error"
+    io.stderr:write (arg[i] .. ": " .. errmsg .. ".\n")
+    os.exit (1)
+  end
+end
+
+
+-- Or zero args for REPL session.
 
 local function REPL ()
   lisp.evalfile "lib/sexpr/init.lsp"
@@ -54,6 +93,11 @@ local function REPL ()
   until not line or line == ":q"
 end
 
-REPL ()
+if #arg == 0 then
+  print [[
+sexpr version 0  Copyright (C) 2014 Gary V. Vaughan"
+enter ":q" to exit; "(describe 'symbol)" for SYMBOL docs]]
+  REPL ()
+end
 
 os.exit (0)
