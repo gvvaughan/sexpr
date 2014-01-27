@@ -331,13 +331,13 @@ Output the printed repreresentation of OBJECT, any Lisp object.
 Primitive ("progn",
 [[
 (progn BODY...)
-Evaluate BODY forms sequentially and return value the last one.
+Evaluate BODY forms sequentially and return value of last one.
 ]],
   function (forms, env)
     local result = Nil
     while forms and forms.car do
       result = lisp.evalsexpr (forms.car, env)
-      forms = list.cdr
+      forms = forms.cdr
     end
     return result
   end
