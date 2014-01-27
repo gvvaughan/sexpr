@@ -23,24 +23,28 @@
 
 local lisp = require "sexpr.lisp"
 
-local Nil, T, Cons, Function, Number =
-      lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number
+local Nil, T, Cons, Function, Number, String =
+      lisp.Nil, lisp.T, lisp.Cons, lisp.Function, lisp.Number, lisp.String
 local append, intern, intern_soft =
-      lisp.append, lisp.intern, lisp.intern_sof
+      lisp.append, lisp.intern, lisp.intern_soft
 
 --- Define a new primitive function.
 -- @string name symbol name
--- @string[opt=nil] special "lazy" for special forms that evaluate their
+-- @string[opt] special "lazy" for special forms that evaluate their
 --   own parameters, or "macro" for forms that output an sexpr for
 --   further evaluation
+-- @string[opt] doc documentation string
 -- @func func handler function
 -- @treturn Symbol interned function symbol
-local function Primitive (name, special, func)
-  if func == nil then
-    special, func = func, special
-  end
+local function Primitive (name, special, doc, func)
+  if func == nil then func, doc, special = doc, special, nil end
+  if func == nil then func, special = special, doc end
+
   local symbol = intern (name)
   symbol.value = Function {name, func, special}
+  if doc then
+    symbol:put ("function-documentation", String {doc})
+  end
 end
 
 
@@ -50,9 +54,11 @@ end
 --[[ ---------------------- ]]--
 
 
--- (* &rest NUMBERS)
--- Return product of any number of arguments, which are numbers.
 Primitive ("*",
+[[
+(* &rest NUMBERS)
+Return product of any number of arguments, which are numbers.
+]],
   function (args)
     local product = 1
     while args and args.car do
@@ -64,9 +70,11 @@ Primitive ("*",
 )
 
 
--- (+ &rest NUMBERS)
--- Return sum of any number of arguments, which are numbers.
 Primitive ("+",
+[[
+(+ &rest NUMBERS)
+Return sum of any number of arguments, which are numbers.
+]],
   function (args)
     local sum = 0
     while args and args.car do
@@ -78,11 +86,13 @@ Primitive ("+",
 )
 
 
--- (- &rest NUMBERS)
--- Negate number or subtract numbers and return the result.
--- With one argument, negates it.  With more than one argument,
--- subtracts all but the first from the first.
 Primitive ("-",
+[[
+(- &rest NUMBERS)
+Negate number or subtract numbers and return the result.
+With one argument, negates it.  With more than one argument,
+subtracts all but the first from the first.
+]],
   function (args)
     if args.car == nil then
       return Number {0}
@@ -100,21 +110,25 @@ Primitive ("-",
 )
 
 
--- (< NUM1 NUM2)
--- Return t if first argument is less than second argument. Both must be
--- numbers.
 Primitive ("<",
+[[
+(< NUM1 NUM2)
+Return t if first argument is less than second argument. Both must be
+numbers.
+]],
   function (args)
     return tonumber (args.car) < tonumber (args.cdr.car) and T or Nil
   end
 )
 
 
--- (append &rest LISTS)
--- Concatenate all the arguments and make the result a list.
--- Return a list whose elements are the elements of all the arguments.
--- The last argument is not copied, just used as the tail of the new list.
 Primitive ("append",
+[[
+(append &rest LISTS)
+Concatenate all the arguments and make the result a list.
+Return a list whose elements are the elements of all the arguments.
+The last argument is not copied, just used as the tail of the new list.
+]],
   function (args)
     if args == Nil then
       return Nil
@@ -127,40 +141,50 @@ Primitive ("append",
 )
 
 
--- (car LIST)
--- Return the car of LIST.  If LIST is nil, return nil.
 Primitive ("car",
+[[
+(car LIST)
+Return the car of LIST.  If LIST is nil, return nil.
+]],
   function (args) return args.car.car end
 )
 
 
--- (cdr LISP)
--- Return the cdr of LIST,  If LIST is nil, return nil.
 Primitive ("cdr",
+[[
+(cdr LISP)
+Return the cdr of LIST,  If LIST is nil, return nil.
+]],
   function (args) return args.car.cdr end
 )
 
 
--- (cons CAR CDR)
--- Create a new cons, give it CAR and CDR as components, and return it.
 Primitive ("cons",
+[[
+(cons CAR CDR)
+Create a new cons, give it CAR and CDR as components, and return it.
+]],
   function (args) return Cons {args.car, args.cdr.car} end
 )
 
 
--- (consp OBJECT)
--- Return t if OBJECT is a cons cell.
 Primitive ("consp",
+[[
+(consp OBJECT)
+Return t if OBJECT is a cons cell.
+]],
   function (args)
     return args.car.kind == "cons" and T or Nil
   end
 )
 
 
--- (defmacro NAME (PARAMS) BODY)
--- Define NAME as a macro.
 Primitive ("defmacro",
   "lazy",
+[[
+(defmacro NAME (PARAMS) BODY)
+Define NAME as a macro.
+]],
   function (sexpr, env)
     local name      = sexpr.car.name
     local paramlist = sexpr.cdr.car
@@ -183,9 +207,24 @@ Primitive ("defmacro",
 )
 
 
--- (eq OBJ1 OBJ2)
--- Return t if the OBJ1 and OBJ2 are the same Lisp object.
+Primitive ("describe",
+[[
+(describe SYMBOL)
+Display function documentation for SYMBOL, if any.
+]],
+  function (args, env)
+    local name   = args.car.name
+    local symbol = intern_soft (name, env)
+    return symbol and symbol:get "function-documentation" or Nil
+  end
+)
+
+
 Primitive ("eq",
+[[
+(eq OBJ1 OBJ2)
+Return t if the OBJ1 and OBJ2 are the same Lisp object.
+]],
   function (args)
     local arg1 = args.car
     local arg2 = args.cdr.car
@@ -197,9 +236,11 @@ Primitive ("eq",
 )
 
 
--- (eval FORM)
--- Evaluate FORM and return its value.
 Primitive ("eval",
+[[
+(eval FORM)
+Evaluate FORM and return its value.
+]],
   function (sexpr, env)
     local car = sexpr.car
     if car.kind == "string" then
@@ -210,13 +251,15 @@ Primitive ("eval",
 )
 
 
--- (if COND THEN &rest ELSE)
--- If COND yields non-nil, do THEN, else do ELSE...
--- Returns the value of THEN or the value of the last of the ELSE's.
--- THEN must be one expression, but ELSE... can be zero or more expressions.
--- If COND yields nil, and there are no ELSE's, the value is nil.
 Primitive ("if",
   "lazy",
+[[
+(if COND THEN &rest ELSE)
+If COND yields non-nil, do THEN, else do ELSE...
+Returns the value of THEN or the value of the last of the ELSE's.
+THEN must be one expression, but ELSE... can be zero or more expressions.
+If COND yields nil, and there are no ELSE's, the value is nil.
+]],
   function (forms, env)
     local cond = lisp.evalsexpr (forms.car, env)
     if cond.kind ~= "nil" then
@@ -234,14 +277,16 @@ Primitive ("if",
 )
 
 
--- (lambda ARGS BODY)
--- Return a lambda expression.
--- A call of the form (lambda ARGS BODY) is self-quoting; the result of
--- evaluating the lambda expression is the expression itself. The lambda
--- expression may then be treated a a function, i.e, stored as the function
--- value of a symbol, passed to `funcall' or `mapcar', etc.
 Primitive ("lambda",
   "lazy",
+[[
+(lambda ARGS BODY)
+Return a lambda expression.
+A call of the form (lambda ARGS BODY) is self-quoting; the result of
+evaluating the lambda expression is the expression itself. The lambda
+expression may then be treated a a function, i.e, stored as the function
+value of a symbol, passed to `funcall' or `mapcar', etc.
+]],
   function (args, env)
     local paramlist = args.car
     local body      = args.cdr.car
@@ -257,9 +302,12 @@ Primitive ("lambda",
   end
 )
 
--- (load FILE)
--- Execute a file of Lisp code named FILE.
+
 Primitive ("load",
+[[
+(load FILE)
+Execute a file of Lisp code named FILE.
+]],
   function (sexpr, env)
     lisp.evalfile (sexpr.car.value, env)
     return T
@@ -267,9 +315,11 @@ Primitive ("load",
 )
 
 
--- (prin1 OBJECT)
--- Output the printed repreresentation of OBJECT, any Lisp object.
 Primitive ("prin1",
+[[
+(prin1 OBJECT)
+Output the printed repreresentation of OBJECT, any Lisp object.
+]],
   function (_, sexpr)
     print (tostring (sexpr.car))
     return T
@@ -277,9 +327,11 @@ Primitive ("prin1",
 )
 
 
--- (progn BODY...)
--- Evaluate BODY forms sequentially and return value the last one.
 Primitive ("progn",
+[[
+(progn BODY...)
+Evaluate BODY forms sequentially and return value the last one.
+]],
   function (forms, env)
     local result = Nil
     while forms and forms.car do
@@ -291,17 +343,19 @@ Primitive ("progn",
 )
 
 
--- (setq [SYMBOL VALUE]...)
--- Set each SYMBOL to the following VALUE.
--- Each SYMBOL is a variable; they are literal (not evaluated).
--- Each VALUE is an expression; they are evaluated.
--- Thus, (setq x (1+ y)) sets `x' to the value of `(1+ y)'.
--- The second VALUE is not computed until after the first SYMBOL is set, and
--- so on; each VALUE can use the new value of variables set earlier in the
--- `setq'.
--- The return value of the `setq' form is the value of the last VALUE.
 Primitive ("setq",
   "lazy",
+[[
+(setq [SYMBOL VALUE]...)
+Set each SYMBOL to the following VALUE.
+Each SYMBOL is a variable; they are literal (not evaluated).
+Each VALUE is an expression; they are evaluated.
+Thus, (setq x (1+ y)) sets `x' to the value of `(1+ y)'.
+The second VALUE is not computed until after the first SYMBOL is set, and
+so on; each VALUE can use the new value of variables set earlier in the
+`setq'.
+The return value of the `setq' form is the value of the last VALUE.
+]],
   function (args, env)
     local symbol
     repeat
@@ -312,6 +366,7 @@ Primitive ("setq",
     return symbol.value
   end
 )
+
 
 return {
   Primitive = Primitive,

@@ -29,8 +29,9 @@ local primitive = require "sexpr.primitive"
 local lisp = require "sexpr.lisp"
 
 
-print "sexpr version 0  Copyright (C) 2014 Gary V. Vaughan"
-print "enter ':q' to exit"
+print [[
+sexpr version 0  Copyright (C) 2014 Gary V. Vaughan"
+enter ":q" to exit; "(describe 'symbol)" for SYMBOL docs]]
 
 
 local function REPL ()

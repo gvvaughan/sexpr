@@ -149,8 +149,24 @@ local String   = ComparableAtom { "string";   _init = { "value" } }
 -- the input stream.
 -- @function Symbol
 -- @string name symbol name
+-- @tparam[opt] table proplist symbol property list
 -- @treturn Symbol a new symbol atom.
-local Symbol   = Atom { "symbol";   _init = { "name" } }
+local Symbol = Atom {
+  "symbol";
+  _init = { "name", "proplist" },
+
+  __index = {
+    get = function (self, propname)
+      return (self.proplist or {})[propname]
+    end,
+
+    put = function (self, propname, value)
+      self.proplist = self.proplist or {}
+      self.proplist[propname] = value
+      return value
+    end,
+  },
+}
 
 
 
