@@ -207,19 +207,6 @@ Define NAME as a macro.
 )
 
 
-Primitive ("describe",
-[[
-(describe SYMBOL)
-Display function documentation for SYMBOL, if any.
-]],
-  function (args, env)
-    local name   = args.car.name
-    local symbol = intern_soft (name, env)
-    return symbol and symbol:get "function-documentation" or Nil
-  end
-)
-
-
 Primitive ("eq",
 [[
 (eq OBJ1 OBJ2)
@@ -247,6 +234,20 @@ Evaluate FORM and return its value.
       return lisp.evalstring (sexpr.car.value, env)
     end
     return lisp.evalsexpr (car, env)
+  end
+)
+
+
+Primitive ("get",
+[[
+(get SYMBOL PROPNAME)
+Return the value of SYMBOL's PROPNAME property.
+]],
+  function (args, env)
+    local name     = args.car.name
+    local propname = args.cdr.car.name
+    local symbol   = intern_soft (name, env)
+    return symbol and symbol:get (propname) or Nil
   end
 )
 
@@ -339,6 +340,21 @@ Evaluate BODY forms sequentially and return value the last one.
       forms = list.cdr
     end
     return result
+  end
+)
+
+
+Primitive ("put",
+[[
+(put SYMBOL PROPNAME VALUE)
+Store VALUE in SYMBOL's PROPNAME property.
+]],
+  function (args, env)
+    local name     = args.car.name
+    local propname = args.cdr.car.name
+    local value    = args.cdr.cdr.car
+    local symbol   = intern_soft (name, env)
+    return symbol and symbol:put (propname, value) or Nil
   end
 )
 

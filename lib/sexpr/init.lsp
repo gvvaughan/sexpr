@@ -34,5 +34,8 @@
 (defun >= (x y)
   (<= y x))
 
+(defun describe (x)
+  (get x 'function-documentation))
+
 (defun nullp (x)
   (eq x nil))
